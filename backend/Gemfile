@@ -20,6 +20,9 @@ gem "http"
 # Serialization
 gem "blueprinter"
 
+# csv was extracted from stdlib to a bundled gem in Ruby 3.4 — must be declared
+gem "csv"
+
 # Seed data generation (used by db:seed in all environments)
 gem "faker"
 
