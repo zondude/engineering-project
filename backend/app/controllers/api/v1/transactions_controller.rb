@@ -1,17 +1,31 @@
+require 'csv'
+
 class Api::V1::TransactionsController < Api::V1::BaseController
   def index
-    transactions = current_user_transactions
-
-    transactions = apply_filters(transactions)
-    transactions = apply_search(transactions)
-    transactions = apply_cursor(transactions)
-
+    transactions = apply_cursor(filtered_scope)
     transactions = transactions.order(id: :desc).limit(page_size)
 
     render json: {
       transactions: TransactionSerializer.render_as_json(transactions),
       next_cursor: transactions.last&.id
     }
+  end
+
+  EXPORT_HEADERS = %w[id date description amount category status source anomaly_flags].freeze
+  EXPORT_BATCH_SIZE = 1000
+
+  def export
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = "attachment; filename=\"transactions-#{Date.current.iso8601}.csv\""
+    response.headers['X-Accel-Buffering'] = 'no'
+    response.headers.delete('Content-Length')
+
+    self.response_body = Enumerator.new do |yielder|
+      yielder << CSV.generate_line(EXPORT_HEADERS)
+      each_export_record do |tx|
+        yielder << CSV.generate_line(export_row(tx))
+      end
+    end
   end
 
   def show
@@ -87,6 +101,48 @@ class Api::V1::TransactionsController < Api::V1::BaseController
 
   def transaction_params
     params.require(:transaction).permit(:date, :description, :amount, :category)
+  end
+
+  def filtered_scope
+    apply_search(apply_filters(current_user_transactions))
+  end
+
+  def export_row(tx)
+    [
+      tx.id,
+      tx.date.iso8601,
+      tx.description,
+      tx.amount.to_s,
+      tx.category,
+      tx.status,
+      tx.source,
+      Array(tx.anomaly_flags).join(';')
+    ]
+  end
+
+  # Streams the filtered scope in date-desc, id-desc order using keyset (cursor)
+  # pagination. Unlike find_each, this preserves the requested ORDER BY clause
+  # and uses the (user_id, date DESC) index for efficient batching at scale.
+  def each_export_record
+    last_date = nil
+    last_id = nil
+
+    loop do
+      batch = filtered_scope
+      if last_date
+        batch = batch.where(
+          '(transactions.date, transactions.id) < (?, ?)',
+          last_date, last_id
+        )
+      end
+      records = batch.order(date: :desc, id: :desc).limit(EXPORT_BATCH_SIZE).to_a
+      break if records.empty?
+
+      records.each { |tx| yield tx }
+
+      last_date = records.last.date
+      last_id = records.last.id
+    end
   end
 
   def apply_filters(scope)

@@ -74,6 +74,23 @@ export async function bulkAction(ids: number[], actionType: string, value?: stri
   return res.data
 }
 
+export async function exportTransactions(params: Record<string, string> = {}) {
+  const res = await api.get('/transactions/export', { params, responseType: 'blob' })
+
+  const disposition = (res.headers['content-disposition'] as string | undefined) ?? ''
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/)
+  const filename = filenameMatch?.[1] ?? `transactions-${new Date().toISOString().slice(0, 10)}.csv`
+
+  const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 // Rules
 export async function fetchRules() {
   const res = await api.get('/rules')

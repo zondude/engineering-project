@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useTransactions, useDeleteTransaction } from '../hooks/useTransactions'
+import { exportTransactions } from '../api/client'
 import TransactionTable from '../components/TransactionTable'
 import BulkActionBar from '../components/BulkActionBar'
 import AddTransactionForm from '../components/AddTransactionForm'
@@ -9,6 +10,7 @@ export default function Transactions() {
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useTransactions(filters)
   const deleteMutation = useDeleteTransaction()
@@ -43,11 +45,23 @@ export default function Transactions() {
     }
   }, [deleteMutation])
 
+  const handleExport = useCallback(async () => {
+    setIsExporting(true)
+    try {
+      await exportTransactions(filters)
+    } finally {
+      setIsExporting(false)
+    }
+  }, [filters])
+
   return (
     <>
       <div className="page-header">
         <h1 className="page-title">Transactions</h1>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={handleExport} disabled={isExporting}>
+            {isExporting ? 'Exporting...' : 'Export CSV'}
+          </button>
           <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>Add Transaction</button>
         </div>
       </div>

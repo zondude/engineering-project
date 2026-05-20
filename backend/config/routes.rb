@@ -12,6 +12,7 @@ Rails.application.routes.draw do
       resources :transactions, only: [:index, :show, :create, :update, :destroy] do
         collection do
           put :bulk
+          get :export
         end
       end
       resources :rules
