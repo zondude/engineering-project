@@ -25,7 +25,7 @@ services:
       - key: SECRET_KEY_BASE
         generateValue: true
       - key: FRONTEND_URL
-        value: https://bookkeeping-frontend.onrender.com
+        value: https://bookkeeping-frontend-s92e.onrender.com
 
   - type: worker
     name: bookkeeping-sidekiq
@@ -71,7 +71,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://bookkeeping-api.onrender.com
+        value: https://bookkeeping-api-bnhh.onrender.com
 
   - type: redis
     name: bookkeeping-redis
