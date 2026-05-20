@@ -9,6 +9,12 @@ end
 
 puts "Created user: #{user.email}"
 
+# Skip bulk seeding if the demo user already has transactions (idempotent across deploys)
+if Transaction.where(user: user).count >= 10_000
+  puts "Already seeded (#{Transaction.where(user: user).count} transactions) — skipping"
+  exit 0
+end
+
 # Categories for transactions
 categories = ['Shopping', 'Food & Dining', 'Entertainment', 'Housing', 'Transportation',
               'Utilities', 'Healthcare', 'Travel', 'Education', 'Subscriptions', nil]

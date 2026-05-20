@@ -20,6 +20,9 @@ gem "http"
 # Serialization
 gem "blueprinter"
 
+# Seed data generation (used by db:seed in all environments)
+gem "faker"
+
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 gem "bootsnap", require: false
 
@@ -28,7 +31,6 @@ group :development, :test do
   gem "rspec-rails"
   gem "factory_bot_rails"
   gem "shoulda-matchers"
-  gem "faker"
 end
 
 group :test do
