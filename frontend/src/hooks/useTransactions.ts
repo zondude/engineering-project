@@ -11,7 +11,7 @@ export function useTransactions(filters: Record<string, string> = {}) {
   return useInfiniteQuery<TransactionsPage>({
     queryKey: ['transactions', filters],
     queryFn: ({ pageParam }) =>
-      fetchTransactions({ ...filters, ...(pageParam ? { cursor: pageParam } : {}) }),
+      fetchTransactions({ ...filters, ...(pageParam ? { cursor: pageParam as number } : {}) }),
     getNextPageParam: (lastPage) => lastPage.next_cursor,
     initialPageParam: undefined as number | undefined,
   })
