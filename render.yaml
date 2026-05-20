@@ -72,6 +72,7 @@ services:
     name: bookkeeping-redis
     plan: free
     maxmemoryPolicy: noeviction
+    ipAllowList: []
 
 databases:
   - name: bookkeeping-db
