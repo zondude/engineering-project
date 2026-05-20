@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: bookkeeping-api
+    env: ruby
+    buildCommand: cd backend && bundle install && bundle exec rails db:migrate
+    startCommand: cd backend && bundle exec puma -C config/puma.rb
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bookkeeping-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: bookkeeping-redis
+          type: redis
+          property: connectionString
+      - key: RAILS_MASTER_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  - type: worker
+    name: bookkeeping-sidekiq
+    env: ruby
+    buildCommand: cd backend && bundle install
+    startCommand: cd backend && bundle exec sidekiq
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bookkeeping-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: bookkeeping-redis
+          type: redis
+          property: connectionString
+
+  - type: web
+    name: bookkeeping-frontend
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://bookkeeping-api.onrender.com
+
+databases:
+  - name: bookkeeping-db
+    databaseName: bookkeeping
+    user: bookkeeping

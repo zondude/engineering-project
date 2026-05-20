@@ -1,0 +1,54 @@
+export interface Transaction {
+  id: number
+  date: string
+  description: string | null
+  description_normalized: string | null
+  amount: string
+  category: string | null
+  status: 'pending' | 'flagged' | 'reviewed'
+  source: 'manual' | 'csv'
+  anomaly_flags: string[]
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  anomalies?: Anomaly[]
+}
+
+export interface Anomaly {
+  id: number
+  transaction_id: number
+  anomaly_type: string
+  severity: 'low' | 'medium' | 'high'
+  details: Record<string, unknown>
+  explanation: string | null
+  explanation_generated_at: string | null
+  resolved: boolean
+  resolved_at: string | null
+  created_at: string
+}
+
+export interface Rule {
+  id: number
+  name: string
+  condition: { field: string; operator: string; value: string }
+  action: { type: string; value?: string }
+  priority: number
+  active: boolean
+  continue_processing: boolean
+  match_count: number
+  last_matched_at: string | null
+  match_rate: number | null
+  stale: boolean
+  overbroad: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DashboardData {
+  uncategorized_count: number
+  flagged_anomalies_count: number
+  reviewed_today: number
+  total_transactions: number
+  recent_anomalies: Anomaly[]
+  uncategorized_sample: Transaction[]
+}
