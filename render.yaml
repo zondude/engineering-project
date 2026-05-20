@@ -48,6 +48,11 @@ services:
         sync: false
       - key: RAILS_ENV
         value: production
+      - key: SECRET_KEY_BASE
+        fromService:
+          type: web
+          name: bookkeeping-api
+          envVarKey: SECRET_KEY_BASE
 
   - type: web
     name: bookkeeping-frontend
