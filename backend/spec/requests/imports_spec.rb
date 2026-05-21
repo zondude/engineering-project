@@ -19,6 +19,24 @@ RSpec.describe 'POST /api/v1/imports', type: :request do
     expect(json_body['import_id']).to be_present
   end
 
+  it 'enqueues the job with the CSV content (string), not a tempfile path' do
+    # Regression: Sidekiq runs in a separate container on Render and cannot
+    # read tempfiles from the web container. Job arg #2 must be the file
+    # CONTENTS, not a /tmp/* path.
+    csv = Rack::Test::UploadedFile.new(
+      Rails.root.join('spec/fixtures/files/valid_transactions.csv'),
+      'text/csv'
+    )
+
+    expect {
+      post '/api/v1/imports', params: { file: csv }
+    }.to have_enqueued_job(CsvImportJob).with { |_user_id, second_arg, _import_id|
+      expect(second_arg).to be_a(String)
+      expect(second_arg).to include('Amazon Purchase') # known content of the fixture
+      expect(second_arg).not_to start_with('/tmp/')
+    }
+  end
+
   it 'rejects non-CSV files' do
     # Create a temp PDF-like file
     file = Rack::Test::UploadedFile.new(

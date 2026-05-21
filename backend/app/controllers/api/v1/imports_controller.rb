@@ -7,7 +7,11 @@ class Api::V1::ImportsController < Api::V1::BaseController
     end
 
     import_id = SecureRandom.uuid
-    CsvImportJob.perform_later(current_user.id, file.path, import_id)
+    # Read the upload into memory here in the web process. Don't pass a tempfile
+    # path to Sidekiq — on Render (and any multi-container deploy) the worker
+    # runs in a different container and won't see /tmp/* from the web container.
+    csv_content = file.read.force_encoding('UTF-8')
+    CsvImportJob.perform_later(current_user.id, csv_content, import_id)
 
     render json: { message: 'Import started', import_id: import_id }, status: :accepted
   end
