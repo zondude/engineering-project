@@ -12,7 +12,7 @@ class AnthropicClient
       'content-type'      => 'application/json'
     ).timeout(30).post(API_URL, json: {
       model:      MODEL,
-      max_tokens: 80,
+      max_tokens: 50,
       messages:   [{ role: 'user', content: prompt }]
     })
 
@@ -25,20 +25,23 @@ class AnthropicClient
 
   def self.build_prompt(ctx)
     <<~PROMPT
-      You are a bookkeeping assistant. A transaction has been flagged as suspicious.
-      Write ONE sentence (max two) in plain English explaining why this transaction
-      looks unusual and what a bookkeeper should verify. Be specific and concise —
-      no preamble, no bullet points, no padding.
+      A transaction was flagged as suspicious. Write ONE sentence, under 20 words,
+      explaining why it's flagged AND what to check. Be terse. No padding, no
+      preamble, no "the bookkeeper should..." — just the facts.
 
-      Transaction details:
+      Examples of the style I want:
+      - "Identical $49.99 Amazon charge on the same date as transaction #482 — possible duplicate."
+      - "$8,500 is 12 std devs above your $52 average; verify vendor and authorization."
+      - "Missing description on a $6,002 round-number payment — likely needs an invoice attached."
+
+      Transaction:
       - Date: #{ctx[:transaction_date]}
       - Description: #{ctx[:transaction_desc]}
       - Amount: $#{ctx[:transaction_amount]}
-      - Flag type: #{ctx[:anomaly_type]}
-      - Severity: #{ctx[:severity]}
-      - Statistical context: #{ctx[:details].to_json}
+      - Flag: #{ctx[:anomaly_type]} (#{ctx[:severity]})
+      - Stats: #{ctx[:details].to_json}
 
-      Respond with the explanation only. No preamble, no bullet points.
+      Reply with the one sentence only.
     PROMPT
   end
 end
