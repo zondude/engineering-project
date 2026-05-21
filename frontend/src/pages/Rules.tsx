@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchRules, deleteRule, updateRule } from '../api/client'
 import type { Rule } from '../types'
 import RuleBuilder from '../components/RuleBuilder'
+import { formatCondition, formatAction } from '../utils/ruleLabels'
 
 export default function Rules() {
   const [showBuilder, setShowBuilder] = useState(false)
@@ -65,14 +66,10 @@ export default function Rules() {
                   {rule.overbroad && <div className="rule-warning">Matches &gt;50% of transactions</div>}
                 </td>
                 <td>
-                  <span className="badge badge-blue">
-                    {rule.condition.field} {rule.condition.operator} "{rule.condition.value}"
-                  </span>
+                  <span className="badge badge-blue">{formatCondition(rule.condition)}</span>
                 </td>
                 <td>
-                  <span className="badge badge-purple">
-                    {rule.action.type}{rule.action.value ? `: ${rule.action.value}` : ''}
-                  </span>
+                  <span className="badge badge-purple">{formatAction(rule.action)}</span>
                 </td>
                 <td>{rule.priority}</td>
                 <td>{rule.match_count}</td>
