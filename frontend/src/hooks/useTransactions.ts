@@ -4,16 +4,16 @@ import type { Transaction } from '../types'
 
 interface TransactionsPage {
   transactions: Transaction[]
-  next_cursor: number | null
+  next_cursor: string | null
 }
 
 export function useTransactions(filters: Record<string, string> = {}) {
   return useInfiniteQuery<TransactionsPage>({
     queryKey: ['transactions', filters],
     queryFn: ({ pageParam }) =>
-      fetchTransactions({ ...filters, ...(pageParam ? { cursor: pageParam as number } : {}) }),
+      fetchTransactions({ ...filters, ...(pageParam ? { cursor: pageParam as string } : {}) }),
     getNextPageParam: (lastPage) => lastPage.next_cursor,
-    initialPageParam: undefined as number | undefined,
+    initialPageParam: undefined as string | undefined,
   })
 }
 

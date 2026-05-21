@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useTransactions, useDeleteTransaction } from '../hooks/useTransactions'
-import TransactionTable from '../components/TransactionTable'
+import TransactionTable, { type SortField, type SortDirection } from '../components/TransactionTable'
 import BulkActionBar from '../components/BulkActionBar'
 import AddTransactionForm from '../components/AddTransactionForm'
 import ExportModal from '../components/ExportModal'
@@ -8,12 +8,28 @@ import type { Transaction } from '../types'
 
 export default function Transactions() {
   const [filters, setFilters] = useState<Record<string, string>>({})
+  const [sort, setSort] = useState<SortField>('id')
+  const [direction, setDirection] = useState<SortDirection>('desc')
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useTransactions(filters)
+  const queryFilters = useMemo(
+    () => ({ ...filters, sort, direction }),
+    [filters, sort, direction]
+  )
+
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useTransactions(queryFilters)
   const deleteMutation = useDeleteTransaction()
+
+  const handleSortChange = useCallback((field: SortField) => {
+    if (field === sort) {
+      setDirection(d => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSort(field)
+      setDirection('desc')
+    }
+  }, [sort])
 
   const allTransactions = useMemo(
     () => data?.pages.flatMap(p => p.transactions) ?? [],
@@ -87,6 +103,9 @@ export default function Transactions() {
             onSelect={handleSelect}
             onSelectAll={handleSelectAll}
             onDelete={handleDelete}
+            sort={sort}
+            direction={direction}
+            onSortChange={handleSortChange}
           />
         )}
 

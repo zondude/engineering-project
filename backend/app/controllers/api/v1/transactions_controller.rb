@@ -1,13 +1,16 @@
 require 'csv'
 
 class Api::V1::TransactionsController < Api::V1::BaseController
+  ALLOWED_SORTS = %w[id date amount].freeze
+  ALLOWED_DIRECTIONS = %w[asc desc].freeze
+
   def index
-    transactions = apply_cursor(filtered_scope)
-    transactions = transactions.order(id: :desc).limit(page_size)
+    transactions = apply_sort(apply_cursor(filtered_scope)).limit(page_size)
+    records = transactions.to_a
 
     render json: {
-      transactions: TransactionSerializer.render_as_json(transactions),
-      next_cursor: transactions.last&.id
+      transactions: TransactionSerializer.render_as_json(records),
+      next_cursor: records.last ? build_cursor(records.last) : nil
     }
   end
 
@@ -167,9 +170,62 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     scope.search_description(params[:search])
   end
 
+  def sort_field
+    ALLOWED_SORTS.include?(params[:sort]) ? params[:sort] : 'id'
+  end
+
+  def sort_direction
+    ALLOWED_DIRECTIONS.include?(params[:direction]) ? params[:direction] : 'desc'
+  end
+
+  # When sorting by date, the natural secondary tiebreaker is amount, and
+  # vice versa. id is always the final tiebreaker for full determinism.
+  def secondary_field
+    sort_field == 'date' ? 'amount' : 'date'
+  end
+
+  def apply_sort(scope)
+    dir = sort_direction.to_sym
+    if sort_field == 'id'
+      scope.order(id: dir)
+    else
+      scope.order(sort_field.to_sym => dir, secondary_field.to_sym => dir, id: dir)
+    end
+  end
+
+  # Composite keyset cursor that encodes all three values used in the ORDER BY
+  # so we can resume correctly even when ties occur on the primary sort field.
+  # Format: "<primary>:<secondary>:<id>" (or just "<id>" when sort=id).
   def apply_cursor(scope)
     return scope unless params[:cursor].present?
-    scope.where('transactions.id < ?', params[:cursor])
+    op = sort_direction == 'desc' ? '<' : '>'
+
+    if sort_field == 'id'
+      scope.where("transactions.id #{op} ?", params[:cursor].to_i)
+    else
+      parts = params[:cursor].to_s.split(':', 3)
+      return scope if parts.size < 3 || parts.any?(&:blank?)
+
+      primary, secondary, id_str = parts
+      scope.where(
+        "(transactions.#{sort_field}, transactions.#{secondary_field}, transactions.id) #{op} (?, ?, ?)",
+        cast_cursor_value(sort_field, primary),
+        cast_cursor_value(secondary_field, secondary),
+        id_str.to_i
+      )
+    end
+  end
+
+  def cast_cursor_value(field, value)
+    field == 'amount' ? value.to_d : value
+  end
+
+  def build_cursor(record)
+    if sort_field == 'id'
+      record.id.to_s
+    else
+      "#{record.public_send(sort_field)}:#{record.public_send(secondary_field)}:#{record.id}"
+    end
   end
 
   def page_size

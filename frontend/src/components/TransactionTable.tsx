@@ -3,15 +3,25 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Transaction } from '../types'
 import AnomalyBadge from './AnomalyBadge'
 
+export type SortField = 'id' | 'date' | 'amount'
+export type SortDirection = 'asc' | 'desc'
+
 interface Props {
   transactions: Transaction[]
   selectedIds: number[]
   onSelect: (id: number, checked: boolean) => void
   onSelectAll: (checked: boolean) => void
   onDelete: (tx: Transaction) => void
+  sort: SortField
+  direction: SortDirection
+  onSortChange: (field: SortField) => void
 }
 
-export default function TransactionTable({ transactions, selectedIds, onSelect, onSelectAll, onDelete }: Props) {
+export default function TransactionTable({ transactions, selectedIds, onSelect, onSelectAll, onDelete, sort, direction, onSortChange }: Props) {
+  const sortIndicator = (field: SortField) => {
+    if (sort !== field) return <span className="sort-indicator">↕</span>
+    return <span className="sort-indicator active">{direction === 'asc' ? '↑' : '↓'}</span>
+  }
   const parentRef = useRef<HTMLDivElement>(null)
 
   const virtualizer = useVirtualizer({
@@ -31,9 +41,13 @@ export default function TransactionTable({ transactions, selectedIds, onSelect, 
             <th style={{ width: 40 }}>
               <input type="checkbox" checked={allSelected} onChange={e => onSelectAll(e.target.checked)} />
             </th>
-            <th>Date</th>
+            <th className="sortable" onClick={() => onSortChange('date')}>
+              Date {sortIndicator('date')}
+            </th>
             <th>Description</th>
-            <th>Amount</th>
+            <th className="sortable" onClick={() => onSortChange('amount')}>
+              Amount {sortIndicator('amount')}
+            </th>
             <th>Category</th>
             <th>Status</th>
             <th>Flags</th>
