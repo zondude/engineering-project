@@ -55,6 +55,21 @@ export interface DashboardData {
   needs_attention_page: number
   needs_attention_total_pages: number
   needs_attention_total: number
+  spending_by_category: SpendingByCategory[]
+  spending_category_range: string
+  spending_trend: SpendingTrendPoint[]
+  spending_trend_range: string
+  spending_trend_granularity: 'day' | 'month'
+}
+
+export interface SpendingByCategory {
+  category: string
+  total: number
+}
+
+export interface SpendingTrendPoint {
+  bucket: string // YYYY-MM-DD (daily) or YYYY-MM (monthly)
+  total: number
 }
 
 export interface NeedsAttentionRow extends Transaction {

@@ -3,6 +3,7 @@ class Api::V1::DashboardController < Api::V1::BaseController
   ALLOWED_FILTERS = %w[all anomalies uncategorized high medium low].freeze
   ALLOWED_SORTS = %w[created_at id date amount].freeze
   ALLOWED_DIRECTIONS = %w[asc desc].freeze
+  ALLOWED_SPENDING_RANGES = %w[7 30 90 180 365 all].freeze
 
   def index
     transactions = current_user_transactions
@@ -33,7 +34,12 @@ class Api::V1::DashboardController < Api::V1::BaseController
       needs_attention_breakdown: breakdown,
       needs_attention_page: page,
       needs_attention_total_pages: [(total_for_filter.to_f / NEEDS_ATTENTION_LIMIT).ceil, 1].max,
-      needs_attention_total: total_for_filter
+      needs_attention_total: total_for_filter,
+      spending_by_category: spending_by_category,
+      spending_category_range: spending_category_range,
+      spending_trend: spending_trend,
+      spending_trend_range: spending_trend_range,
+      spending_trend_granularity: spending_trend_granularity
     }
   end
 
@@ -163,6 +169,78 @@ class Api::V1::DashboardController < Api::V1::BaseController
           )
         SQL
         .includes(anomalies: [])
+    end
+  end
+
+  # Selected ranges (independent per chart). Falls back to 30 on invalid input.
+  def spending_category_range
+    raw = params[:spending_category_days].to_s
+    ALLOWED_SPENDING_RANGES.include?(raw) ? raw : '30'
+  end
+
+  def spending_trend_range
+    raw = params[:spending_trend_days].to_s
+    ALLOWED_SPENDING_RANGES.include?(raw) ? raw : '30'
+  end
+
+  # Whether the trend chart uses daily buckets (short ranges) or monthly
+  # (longer ranges). Daily for <=30 days, monthly otherwise.
+  def spending_trend_granularity
+    days = spending_trend_range
+    (days == 'all' || days.to_i > 30) ? 'month' : 'day'
+  end
+
+  # Aggregate positive spending grouped by category, within the selected
+  # category window. Uncategorized rolls up under "Uncategorized".
+  def spending_by_category
+    scope = current_user_transactions.where('amount > 0')
+    if spending_category_range != 'all'
+      scope = scope.where('date >= ?', spending_category_range.to_i.days.ago.to_date)
+    end
+    scope
+      .group(Arel.sql("COALESCE(NULLIF(category, ''), 'Uncategorized')"))
+      .sum(:amount)
+      .map { |category, total| { category: category, total: total.to_f.round(2) } }
+      .sort_by { |row| -row[:total] }
+  end
+
+  # Spending trend: daily buckets for short ranges (7/30 days) so the chart
+  # actually shows day-to-day variation, monthly for longer ranges so 12
+  # months don't squash into 365 tiny bars. Each row: { bucket, total }.
+  def spending_trend
+    if spending_trend_granularity == 'day'
+      n = spending_trend_range.to_i
+      start = (n - 1).days.ago.to_date
+      raw = current_user_transactions
+        .where('date >= ?', start)
+        .where('amount > 0')
+        .group(:date)
+        .sum(:amount)
+
+      (0...n).map do |offset|
+        date = start + offset.days
+        { bucket: date.strftime('%Y-%m-%d'), total: (raw[date] || 0).to_f.round(2) }
+      end
+    else
+      months = case spending_trend_range
+               when '90'  then 3
+               when '180' then 6
+               when '365' then 12
+               else 12
+               end
+
+      start = (months - 1).months.ago.beginning_of_month
+      raw = current_user_transactions
+        .where('date >= ?', start)
+        .where('amount > 0')
+        .group(Arel.sql("to_char(date, 'YYYY-MM')"))
+        .sum(:amount)
+
+      (0...months).map do |offset|
+        month_start = start + offset.months
+        key = month_start.strftime('%Y-%m')
+        { bucket: key, total: (raw[key] || 0).to_f.round(2) }
+      end
     end
   end
 end

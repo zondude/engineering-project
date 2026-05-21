@@ -187,6 +187,68 @@ RSpec.describe 'GET /api/v1/dashboard (needs_attention)', type: :request do
     end
   end
 
+  describe 'spending range params (independent for category vs trend)' do
+    before do
+      create(:transaction, user: user, date: 200.days.ago.to_date, amount: 100)
+      create(:transaction, user: user, date: 3.days.ago.to_date, amount: 50)
+      create(:transaction, user: user, date: 5.days.ago.to_date, amount: 25)
+    end
+
+    it 'defaults to 30 days for both ranges' do
+      get '/api/v1/dashboard'
+
+      body = JSON.parse(response.body)
+      expect(body['spending_category_range']).to eq('30')
+      expect(body['spending_trend_range']).to eq('30')
+    end
+
+    it 'category range and trend range are independent' do
+      get '/api/v1/dashboard', params: { spending_category_days: '365', spending_trend_days: '90' }
+
+      body = JSON.parse(response.body)
+      expect(body['spending_category_range']).to eq('365')
+      expect(body['spending_trend_range']).to eq('90')
+    end
+
+    it 'category aggregation respects the category range only' do
+      get '/api/v1/dashboard', params: { spending_category_days: '7', spending_trend_days: '365' }
+
+      total = JSON.parse(response.body)['spending_by_category'].sum { |r| r['total'] }
+      expect(total).to eq(75.0) # only the two recent (3d, 5d) transactions
+    end
+
+    it 'accepts the new 7d option' do
+      get '/api/v1/dashboard', params: { spending_category_days: '7' }
+      expect(JSON.parse(response.body)['spending_category_range']).to eq('7')
+    end
+
+    it 'falls back to 30 on invalid values for either range' do
+      get '/api/v1/dashboard', params: { spending_category_days: 'forever', spending_trend_days: 'never' }
+
+      body = JSON.parse(response.body)
+      expect(body['spending_category_range']).to eq('30')
+      expect(body['spending_trend_range']).to eq('30')
+    end
+
+    it 'uses DAILY granularity for trend ranges <= 30 days' do
+      get '/api/v1/dashboard', params: { spending_trend_days: '7' }
+
+      body = JSON.parse(response.body)
+      expect(body['spending_trend_granularity']).to eq('day')
+      expect(body['spending_trend'].size).to eq(7)
+      expect(body['spending_trend'].first['bucket']).to match(/^\d{4}-\d{2}-\d{2}$/)
+    end
+
+    it 'uses MONTHLY granularity for trend ranges > 30 days' do
+      get '/api/v1/dashboard', params: { spending_trend_days: '90' }
+
+      body = JSON.parse(response.body)
+      expect(body['spending_trend_granularity']).to eq('month')
+      expect(body['spending_trend'].size).to eq(3)
+      expect(body['spending_trend'].first['bucket']).to match(/^\d{4}-\d{2}$/)
+    end
+  end
+
   describe 'needs_attention_breakdown global counts' do
     it 'returns accurate counts per filter, even when the loaded list is smaller' do
       # 25 uncategorized (NEEDS_ATTENTION_LIMIT is 20, so list will only show 20)

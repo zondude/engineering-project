@@ -5,6 +5,7 @@ import { fetchDashboard, updateTransaction, deleteTransaction } from '../api/cli
 import type { DashboardData, NeedsAttentionRow, Anomaly } from '../types'
 import AnomalyBadge from '../components/AnomalyBadge'
 import TransactionForm from '../components/TransactionForm'
+import SpendingCharts, { type SpendingRange } from '../components/SpendingCharts'
 
 const TRUNCATE_AT = 150
 const SEVERITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 }
@@ -32,10 +33,19 @@ export default function Dashboard() {
   const [sort, setSort] = useState<SortField>('created_at')
   const [direction, setDirection] = useState<SortDirection>('desc')
   const [page, setPage] = useState(1)
+  const [categoryRange, setCategoryRange] = useState<SpendingRange>('30')
+  const [trendRange, setTrendRange] = useState<SpendingRange>('180')
 
-  const { data, isLoading, refetch } = useQuery<DashboardData>({
-    queryKey: ['dashboard', filter, sort, direction, page],
-    queryFn: () => fetchDashboard({ filter, sort, direction, page }),
+  const { data, isLoading, isFetching, refetch } = useQuery<DashboardData>({
+    queryKey: ['dashboard', filter, sort, direction, page, categoryRange, trendRange],
+    queryFn: () => fetchDashboard({
+      filter, sort, direction, page,
+      spending_category_days: categoryRange,
+      spending_trend_days: trendRange,
+    }),
+    // Keep the previous dashboard visible while a new fetch is in flight so
+    // changing a filter / sort / range doesn't blank the whole page.
+    placeholderData: (prev) => prev,
   })
 
   // Reset to page 1 whenever filter / sort changes
@@ -94,7 +104,10 @@ export default function Dashboard() {
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Dashboard</h1>
+        <h1 className="page-title">
+          Dashboard
+          {isFetching && !isLoading && <span className="refreshing-dot" aria-label="Refreshing" />}
+        </h1>
       </div>
 
       <div className="cards-row">
@@ -111,6 +124,16 @@ export default function Dashboard() {
           <div className="value">{data.total_transactions.toLocaleString()}</div>
         </div>
       </div>
+
+      <SpendingCharts
+        byCategory={data.spending_by_category}
+        trend={data.spending_trend}
+        trendGranularity={data.spending_trend_granularity}
+        categoryRange={categoryRange}
+        trendRange={trendRange}
+        onCategoryRangeChange={setCategoryRange}
+        onTrendRangeChange={setTrendRange}
+      />
 
       <div className="section">
         <div className="section-header">

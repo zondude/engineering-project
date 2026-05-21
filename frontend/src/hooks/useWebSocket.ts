@@ -27,6 +27,47 @@ function cableUrl(): string {
   return `${proto}//${window.location.host}/cable`
 }
 
+interface AnomalyNotification {
+  type: 'new_anomaly'
+  anomaly_type: string
+  severity: string
+  transaction_id: number
+}
+
+/**
+ * Subscribes to the per-user anomaly broadcast. Calls `onNotification`
+ * every time the backend detects a new anomaly (which happens whenever
+ * a transaction is created manually or via CSV import).
+ *
+ * Mount this on the Dashboard so it auto-refreshes when new flags
+ * appear without requiring a page reload.
+ */
+export function useAnomalyNotifications(onNotification: (n: AnomalyNotification) => void) {
+  useEffect(() => {
+    const userId = localStorage.getItem('user_id')
+    if (!userId) return
+
+    const ws = new WebSocket(cableUrl())
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        command: 'subscribe',
+        identifier: JSON.stringify({ channel: 'AnomalyChannel', user_id: userId })
+      }))
+    }
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (data.type === 'ping' || data.type === 'welcome' || data.type === 'confirm_subscription') return
+      if (data.message?.type === 'new_anomaly') {
+        onNotification(data.message)
+      }
+    }
+
+    return () => { ws.close() }
+  }, [onNotification])
+}
+
 export function useImportProgress(importId: string | null) {
   const [progress, setProgress] = useState<ImportProgress | null>(null)
   const wsRef = useRef<WebSocket | null>(null)

@@ -5,6 +5,7 @@ import Transactions from './pages/Transactions'
 import Rules from './pages/Rules'
 import Import from './pages/Import'
 import Login from './pages/Login'
+import NotificationToaster from './components/NotificationToaster'
 import './App.css'
 
 const queryClient = new QueryClient({
@@ -51,6 +52,7 @@ function Layout() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
+      <NotificationToaster />
     </>
   )
 }

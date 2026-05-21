@@ -36,17 +36,20 @@ export default api
 
 export async function signIn(email: string, password: string) {
   const res = await api.post('/auth/sign_in', { user: { email, password } })
+  if (res.data?.user?.id) localStorage.setItem('user_id', String(res.data.user.id))
   return res.data
 }
 
 export async function signUp(email: string, password: string) {
   const res = await api.post('/auth/sign_up', { user: { email, password } })
+  if (res.data?.user?.id) localStorage.setItem('user_id', String(res.data.user.id))
   return res.data
 }
 
 export async function signOut() {
   await api.delete('/auth/sign_out')
   localStorage.removeItem('auth_token')
+  localStorage.removeItem('user_id')
 }
 
 // Transactions

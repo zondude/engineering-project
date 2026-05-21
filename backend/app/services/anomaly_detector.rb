@@ -24,6 +24,13 @@ class AnomalyDetector
           details: flag[:details] || {}
         )
         AnomalyExplanationJob.perform_later(anomaly.id)
+        # Live-push the new anomaly to any Dashboard tab the user has open.
+        # Frontend invalidates the dashboard query so the new row appears
+        # without a page reload.
+        ActionCable.server.broadcast(
+          "anomalies_for_user_#{transaction.user_id}",
+          { type: 'new_anomaly', anomaly_type: flag[:type], severity: severity, transaction_id: transaction.id }
+        )
       end
 
       all_flags = (transaction.anomaly_flags || []) + flags.map { |f| f[:type] }
