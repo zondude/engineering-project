@@ -12,7 +12,7 @@ class AnthropicClient
       'content-type'      => 'application/json'
     ).timeout(30).post(API_URL, json: {
       model:      MODEL,
-      max_tokens: 150,
+      max_tokens: 80,
       messages:   [{ role: 'user', content: prompt }]
     })
 
@@ -26,8 +26,9 @@ class AnthropicClient
   def self.build_prompt(ctx)
     <<~PROMPT
       You are a bookkeeping assistant. A transaction has been flagged as suspicious.
-      Write 1-2 sentences in plain English explaining why this transaction looks unusual
-      and what a bookkeeper should verify. Be specific, not generic.
+      Write ONE sentence (max two) in plain English explaining why this transaction
+      looks unusual and what a bookkeeper should verify. Be specific and concise —
+      no preamble, no bullet points, no padding.
 
       Transaction details:
       - Date: #{ctx[:transaction_date]}

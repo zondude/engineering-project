@@ -1,23 +1,58 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchDashboard, resolveAnomaly, updateTransaction } from '../api/client'
-import type { DashboardData } from '../types'
+import { fetchDashboard, updateTransaction, deleteTransaction } from '../api/client'
+import type { DashboardData, NeedsAttentionRow, Anomaly } from '../types'
 import AnomalyBadge from '../components/AnomalyBadge'
+import TransactionForm from '../components/TransactionForm'
 
 const TRUNCATE_AT = 150
+const SEVERITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 }
 
-type AnomalyView = 'unresolved' | 'resolved'
+type NeedsFilter = 'all' | 'anomalies' | 'high' | 'medium' | 'low' | 'uncategorized'
+type SortField = 'created_at' | 'id' | 'date' | 'amount'
+type SortDirection = 'asc' | 'desc'
+
+function maxSeverity(anomalies: Anomaly[]): 'high' | 'medium' | 'low' | null {
+  if (!anomalies.length) return null
+  return anomalies.reduce<'high' | 'medium' | 'low' | null>((acc, a) => {
+    const rank = SEVERITY_RANK[a.severity] ?? 0
+    const accRank = acc ? SEVERITY_RANK[acc] : 0
+    return rank > accRank ? a.severity : acc
+  }, null)
+}
+
+function isUncategorized(row: NeedsAttentionRow): boolean {
+  return !row.category || row.category === ''
+}
 
 export default function Dashboard() {
-  const [view, setView] = useState<AnomalyView>('unresolved')
+  const queryClient = useQueryClient()
+  const [filter, setFilter] = useState<NeedsFilter>('all')
+  const [sort, setSort] = useState<SortField>('created_at')
+  const [direction, setDirection] = useState<SortDirection>('desc')
+  const [page, setPage] = useState(1)
 
   const { data, isLoading, refetch } = useQuery<DashboardData>({
-    queryKey: ['dashboard', view],
-    queryFn: () => fetchDashboard(view),
+    queryKey: ['dashboard', filter, sort, direction, page],
+    queryFn: () => fetchDashboard({ filter, sort, direction, page }),
   })
 
+  // Reset to page 1 whenever filter / sort changes
+  const changeFilter = (next: NeedsFilter) => { setFilter(next); setPage(1) }
+  const toggleSort = (field: SortField) => {
+    if (sort !== field) { setSort(field); setDirection('desc') }
+    else { setDirection(d => d === 'asc' ? 'desc' : 'asc') }
+    setPage(1)
+  }
+  const sortIndicator = (field: SortField) => {
+    if (sort !== field) return <span className="sort-indicator">↕</span>
+    return <span className="sort-indicator active">{direction === 'asc' ? '↑' : '↓'}</span>
+  }
+
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const [editingTransaction, setEditingTransaction] = useState<NeedsAttentionRow | null>(null)
+
   const toggleExpanded = (id: number) => {
     setExpandedIds(prev => {
       const next = new Set(prev)
@@ -26,17 +61,35 @@ export default function Dashboard() {
     })
   }
 
+  const rows = data?.needs_attention ?? []
+  const counts = data?.needs_attention_breakdown ?? { all: 0, anomalies: 0, high: 0, medium: 0, low: 0, uncategorized: 0 }
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    queryClient.invalidateQueries({ queryKey: ['transactions'] })
+  }
+
   const handleApprove = async (id: number) => {
     await updateTransaction(id, { approve: true })
+    invalidateAll()
     refetch()
   }
 
-  const handleResolve = async (id: number) => {
-    await resolveAnomaly(id)
+  const handleDelete = async (row: NeedsAttentionRow) => {
+    if (!confirm(`Delete transaction #${row.id}?`)) return
+    await deleteTransaction(row.id)
+    invalidateAll()
     refetch()
   }
 
   if (isLoading || !data) return <div className="empty-state">Loading...</div>
+
+  const reasonsFor = (row: NeedsAttentionRow): string[] => {
+    const types = row.anomalies.map(a => a.anomaly_type)
+    if (isUncategorized(row) && types.length === 0) return ['uncategorized']
+    if (isUncategorized(row)) return [...types, 'uncategorized']
+    return types
+  }
 
   return (
     <>
@@ -54,10 +107,6 @@ export default function Dashboard() {
           <div className="value red">{data.flagged_anomalies_count}</div>
         </div>
         <div className="stat-card">
-          <div className="label">Reviewed Today</div>
-          <div className="value green">{data.reviewed_today}</div>
-        </div>
-        <div className="stat-card">
           <div className="label">Total Transactions</div>
           <div className="value">{data.total_transactions.toLocaleString()}</div>
         </div>
@@ -65,118 +114,152 @@ export default function Dashboard() {
 
       <div className="section">
         <div className="section-header">
-          <h2 className="section-title">{view === 'resolved' ? 'Resolved Anomalies' : 'Needs Attention'}</h2>
-          <div className="view-toggle">
-            <button
-              className={`view-toggle-btn ${view === 'unresolved' ? 'active' : ''}`}
-              onClick={() => setView('unresolved')}
-            >
-              Unresolved ({data.unresolved_anomalies_count})
+          <h2 className="section-title">Needs Attention</h2>
+          <div className="severity-filter">
+            <button className={`pill ${filter === 'all' ? 'active' : ''}`} onClick={() => changeFilter('all')}>
+              All ({counts.all.toLocaleString()})
             </button>
-            <button
-              className={`view-toggle-btn ${view === 'resolved' ? 'active' : ''}`}
-              onClick={() => setView('resolved')}
-            >
-              Resolved ({data.resolved_anomalies_count})
+            <button className={`pill ${filter === 'anomalies' ? 'active' : ''}`} onClick={() => changeFilter('anomalies')}>
+              Anomalies ({counts.anomalies.toLocaleString()})
+            </button>
+            <button className={`pill pill-red ${filter === 'high' ? 'active' : ''}`} onClick={() => changeFilter('high')}>
+              High ({counts.high.toLocaleString()})
+            </button>
+            <button className={`pill pill-amber ${filter === 'medium' ? 'active' : ''}`} onClick={() => changeFilter('medium')}>
+              Medium ({counts.medium.toLocaleString()})
+            </button>
+            <button className={`pill pill-gray ${filter === 'low' ? 'active' : ''}`} onClick={() => changeFilter('low')}>
+              Low ({counts.low.toLocaleString()})
+            </button>
+            <button className={`pill ${filter === 'uncategorized' ? 'active' : ''}`} onClick={() => changeFilter('uncategorized')}>
+              Uncategorized ({counts.uncategorized.toLocaleString()})
             </button>
           </div>
         </div>
+
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Transaction</th>
-                <th>Amount</th>
+                <th className="sortable" onClick={() => toggleSort('id')}>
+                  Transaction {sortIndicator('id')}
+                </th>
+                <th className="sortable" onClick={() => toggleSort('date')}>
+                  Date {sortIndicator('date')}
+                </th>
+                <th className="sortable" onClick={() => toggleSort('amount')}>
+                  Amount {sortIndicator('amount')}
+                </th>
                 <th>Severity</th>
+                <th>Type</th>
                 <th>Explanation</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {data.recent_anomalies.map(anomaly => (
-                <tr key={anomaly.id}>
-                  <td><AnomalyBadge type={anomaly.anomaly_type} /></td>
-                  <td>
-                    <Link to={`/transactions?id=${anomaly.transaction_id}`} className="tx-link">
-                      ID #{anomaly.transaction_id}
-                    </Link>
-                  </td>
-                  <td className="amount">${Number(anomaly.details?.transaction_amount || 0).toFixed(2)}</td>
-                  <td>
-                    <span className={`badge badge-${anomaly.severity === 'high' ? 'red' : anomaly.severity === 'medium' ? 'amber' : 'gray'}`}>
-                      {anomaly.severity}
-                    </span>
-                  </td>
-                  <td>
-                    {anomaly.explanation ? (
-                      <div className={`anomaly-explanation ${expandedIds.has(anomaly.id) ? 'expanded' : ''}`}>
-                        <p>{anomaly.explanation}</p>
-                        {anomaly.explanation.length > TRUNCATE_AT && (
-                          <button className="show-more-btn" onClick={() => toggleExpanded(anomaly.id)}>
-                            {expandedIds.has(anomaly.id) ? 'Show less' : 'Show more'}
-                          </button>
-                        )}
+              {rows.map(row => {
+                const sev = maxSeverity(row.anomalies)
+                const reasons = reasonsFor(row)
+                const firstExplanation = row.anomalies.find(a => a.explanation)?.explanation
+                return (
+                  <tr key={row.id}>
+                    <td>
+                      <Link to={`/transactions?id=${row.id}`} className="tx-link">#{row.id}</Link>
+                      <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                        {row.description || '(no description)'}
                       </div>
-                    ) : (
-                      <div className="anomaly-explanation generating">
-                        <p>Generating explanation...</p>
-                      </div>
-                    )}
-                  </td>
-                  <td className="actions">
-                    {view === 'unresolved' && (
-                      <>
-                        <button className="btn btn-sm" onClick={() => handleResolve(anomaly.id)}>Resolve</button>
-                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(anomaly.transaction_id)}>Approve</button>
-                      </>
-                    )}
-                    {view === 'resolved' && (
-                      <span style={{ color: 'var(--text3)', fontSize: 12 }}>Resolved</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {data.recent_anomalies.length === 0 && (
-                <tr><td colSpan={6} className="empty-state">
-                  {view === 'resolved' ? 'No resolved anomalies yet' : 'No anomalies to review'}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{row.date}</td>
+                    <td className="amount">${Number(row.amount).toFixed(2)}</td>
+                    <td>
+                      {sev ? (
+                        <span className={`badge badge-${sev === 'high' ? 'red' : sev === 'medium' ? 'amber' : 'gray'}`}>{sev}</span>
+                      ) : (
+                        <span style={{ color: 'var(--text3)' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {reasons.length > 0 ? (
+                        reasons.map(r => <AnomalyBadge key={r} type={r} />)
+                      ) : (
+                        <span style={{ color: 'var(--text3)' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {firstExplanation ? (
+                        <div className={`anomaly-explanation ${expandedIds.has(row.id) ? 'expanded' : ''}`}>
+                          <p>{firstExplanation}</p>
+                          {firstExplanation.length > TRUNCATE_AT && (
+                            <button className="show-more-btn" onClick={() => toggleExpanded(row.id)}>
+                              {expandedIds.has(row.id) ? 'Show less' : 'Show more'}
+                            </button>
+                          )}
+                        </div>
+                      ) : row.anomalies.length > 0 ? (
+                        <div className="anomaly-explanation generating">
+                          <p>Generating explanation...</p>
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text3)' }}>Needs categorization</span>
+                      )}
+                    </td>
+                    <td className="actions">
+                      <button className="btn btn-sm" onClick={() => setEditingTransaction(row)}>Edit</button>
+                      <button className="btn btn-sm btn-primary" onClick={() => handleApprove(row.id)}>Approve</button>
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(row)}>Delete</button>
+                    </td>
+                  </tr>
+                )
+              })}
+              {rows.length === 0 && (
+                <tr><td colSpan={7} className="empty-state">
+                  {filter === 'all' ? 'Nothing needs attention.' : `No ${filter} items.`}
                 </td></tr>
               )}
             </tbody>
           </table>
+
+          {data.needs_attention_total_pages > 1 && (
+            <div className="pagination">
+              <button
+                className="btn btn-sm"
+                onClick={() => setPage(p => Math.max(p - 1, 1))}
+                disabled={page <= 1}
+              >
+                ← Previous
+              </button>
+              <span className="page-indicator">
+                Page <strong>{data.needs_attention_page}</strong> of <strong>{data.needs_attention_total_pages}</strong>
+                <span style={{ color: 'var(--text3)', marginLeft: 8 }}>({data.needs_attention_total.toLocaleString()} total)</span>
+              </span>
+              <button
+                className="btn btn-sm"
+                onClick={() => setPage(p => Math.min(p + 1, data.needs_attention_total_pages))}
+                disabled={page >= data.needs_attention_total_pages}
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="section">
-        <h2 className="section-title">Uncategorized Transactions</h2>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.uncategorized_sample.map(tx => (
-                <tr key={tx.id}>
-                  <td>{tx.date}</td>
-                  <td>{tx.description || <span style={{ color: 'var(--text3)' }}>(no description)</span>}</td>
-                  <td className="amount">${Number(tx.amount).toFixed(2)}</td>
-                  <td>
-                    <button className="btn btn-sm btn-primary" onClick={() => handleApprove(tx.id)}>Approve</button>
-                  </td>
-                </tr>
-              ))}
-              {data.uncategorized_sample.length === 0 && (
-                <tr><td colSpan={4} className="empty-state">All transactions categorized</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {editingTransaction && (
+        <>
+          <div className="slide-over-backdrop" onClick={() => setEditingTransaction(null)} />
+          <div className="slide-over">
+            <h2>Edit Transaction #{editingTransaction.id}</h2>
+            <TransactionForm
+              transaction={editingTransaction}
+              onClose={() => {
+                setEditingTransaction(null)
+                invalidateAll()
+                refetch()
+              }}
+            />
+          </div>
+        </>
+      )}
     </>
   )
 }

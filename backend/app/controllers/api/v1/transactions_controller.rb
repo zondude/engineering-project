@@ -5,12 +5,17 @@ class Api::V1::TransactionsController < Api::V1::BaseController
   ALLOWED_DIRECTIONS = %w[asc desc].freeze
 
   def index
-    transactions = apply_sort(apply_cursor(filtered_scope)).limit(page_size)
-    records = transactions.to_a
+    scope = filtered_scope
+    total = scope.count
+    sorted = apply_sort(scope)
+    records = sorted.offset((current_page - 1) * page_size).limit(page_size).to_a
 
     render json: {
       transactions: TransactionSerializer.render_as_json(records),
-      next_cursor: records.last ? build_cursor(records.last) : nil
+      page: current_page,
+      per_page: page_size,
+      total: total,
+      total_pages: [(total.to_f / page_size).ceil, 1].max
     }
   end
 
@@ -60,7 +65,19 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     if params[:approve].present? || params.dig(:transaction, :approve).present?
       approve_and_resolve(transaction)
       render json: TransactionSerializer.render_as_json(transaction.reload, view: :detail)
-    elsif transaction.update(transaction_params)
+      return
+    end
+
+    new_status = params.dig(:transaction, :status)
+    if new_status.present? && new_status != transaction.status
+      target = new_status.to_sym
+      unless transaction.state_machine.can_transition_to?(target)
+        return render_error("Cannot transition from #{transaction.status} to #{new_status}", status: :unprocessable_entity)
+      end
+      transaction.state_machine.transition_to!(target)
+    end
+
+    if transaction.update(transaction_params)
       render json: TransactionSerializer.render_as_json(transaction.reload, view: :detail)
     else
       render_error(transaction.errors.full_messages)
@@ -208,39 +225,8 @@ class Api::V1::TransactionsController < Api::V1::BaseController
     end
   end
 
-  # Composite keyset cursor that encodes all three values used in the ORDER BY
-  # so we can resume correctly even when ties occur on the primary sort field.
-  # Format: "<primary>:<secondary>:<id>" (or just "<id>" when sort=id).
-  def apply_cursor(scope)
-    return scope unless params[:cursor].present?
-    op = sort_direction == 'desc' ? '<' : '>'
-
-    if sort_field == 'id'
-      scope.where("transactions.id #{op} ?", params[:cursor].to_i)
-    else
-      parts = params[:cursor].to_s.split(':', 3)
-      return scope if parts.size < 3 || parts.any?(&:blank?)
-
-      primary, secondary, id_str = parts
-      scope.where(
-        "(transactions.#{sort_field}, transactions.#{secondary_field}, transactions.id) #{op} (?, ?, ?)",
-        cast_cursor_value(sort_field, primary),
-        cast_cursor_value(secondary_field, secondary),
-        id_str.to_i
-      )
-    end
-  end
-
-  def cast_cursor_value(field, value)
-    field == 'amount' ? value.to_d : value
-  end
-
-  def build_cursor(record)
-    if sort_field == 'id'
-      record.id.to_s
-    else
-      "#{record.public_send(sort_field)}:#{record.public_send(secondary_field)}:#{record.id}"
-    end
+  def current_page
+    [params[:page].to_i, 1].max
   end
 
   def page_size

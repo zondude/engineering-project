@@ -9,9 +9,6 @@ RSpec.describe 'GET /api/v1/transactions (sorting)', type: :request do
     JSON.parse(response.body)['transactions'].map { |t| t['id'] }
   end
 
-  def next_cursor
-    JSON.parse(response.body)['next_cursor']
-  end
 
   describe 'sort=date' do
     let!(:oldest) { create(:transaction, user: user, date: Date.new(2024, 1, 1)) }
@@ -70,25 +67,31 @@ RSpec.describe 'GET /api/v1/transactions (sorting)', type: :request do
   end
 
   describe 'cursor format' do
-    it 'returns a numeric-string cursor when sort=id' do
-      create_list(:transaction, 2, user: user)
-      get '/api/v1/transactions', params: { sort: 'id', per_page: 1 }
+    it 'returns page metadata in the response' do
+      create_list(:transaction, 3, user: user)
+      get '/api/v1/transactions', params: { sort: 'id', per_page: 2 }
 
-      expect(next_cursor).to match(/^\d+$/)
+      body = JSON.parse(response.body)
+      expect(body['page']).to eq(1)
+      expect(body['per_page']).to eq(2)
+      expect(body['total']).to eq(3)
+      expect(body['total_pages']).to eq(2)
     end
 
-    it 'returns a "date:amount:id" composite cursor when sort=date' do
-      create_list(:transaction, 2, user: user)
-      get '/api/v1/transactions', params: { sort: 'date', per_page: 1 }
+    it 'returns the requested page when page= is provided' do
+      txs = create_list(:transaction, 5, user: user) # id-desc: txs[4], txs[3], txs[2], txs[1], txs[0]
 
-      expect(next_cursor).to match(/^\d{4}-\d{2}-\d{2}:\d+\.\d+:\d+$/)
+      get '/api/v1/transactions', params: { sort: 'id', direction: 'desc', per_page: 2, page: 2 }
+
+      expect(ids_in_order).to eq([txs[2].id, txs[1].id])
     end
 
-    it 'returns an "amount:date:id" composite cursor when sort=amount' do
+    it 'clamps page values less than 1 to 1' do
       create_list(:transaction, 2, user: user)
-      get '/api/v1/transactions', params: { sort: 'amount', per_page: 1 }
 
-      expect(next_cursor).to match(/^\d+\.\d+:\d{4}-\d{2}-\d{2}:\d+$/)
+      get '/api/v1/transactions', params: { page: -5 }
+
+      expect(JSON.parse(response.body)['page']).to eq(1)
     end
   end
 

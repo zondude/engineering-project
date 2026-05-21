@@ -1,9 +1,9 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useTransactions, useDeleteTransaction } from '../hooks/useTransactions'
+import { useTransactions, useDeleteTransaction, useUpdateTransaction } from '../hooks/useTransactions'
 import TransactionTable, { type SortField, type SortDirection } from '../components/TransactionTable'
 import BulkActionBar from '../components/BulkActionBar'
-import AddTransactionForm from '../components/AddTransactionForm'
+import TransactionForm from '../components/TransactionForm'
 import ExportModal from '../components/ExportModal'
 import type { Transaction } from '../types'
 
@@ -14,13 +14,15 @@ export default function Transactions() {
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [sort, setSort] = useState<SortField>('id')
   const [direction, setDirection] = useState<SortDirection>('desc')
+  const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
-  const [showAddForm, setShowAddForm] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
 
   const queryFilters = useMemo(
-    () => ({ ...filters, sort, direction, ...(idFilter ? { id: idFilter } : {}) }),
-    [filters, sort, direction, idFilter]
+    () => ({ ...filters, sort, direction, page, ...(idFilter ? { id: idFilter } : {}) }),
+    [filters, sort, direction, page, idFilter]
   )
 
   const clearIdFilter = useCallback(() => {
@@ -29,8 +31,9 @@ export default function Transactions() {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useTransactions(queryFilters)
+  const { data, isLoading } = useTransactions(queryFilters)
   const deleteMutation = useDeleteTransaction()
+  const updateMutation = useUpdateTransaction()
 
   const handleSortChange = useCallback((field: SortField) => {
     if (field === sort) {
@@ -39,12 +42,12 @@ export default function Transactions() {
       setSort(field)
       setDirection('desc')
     }
+    setPage(1) // sort changes reset to first page
   }, [sort])
 
-  const allTransactions = useMemo(
-    () => data?.pages.flatMap(p => p.transactions) ?? [],
-    [data]
-  )
+  const allTransactions = data?.transactions ?? []
+  const totalPages = data?.total_pages ?? 1
+  const currentPage = data?.page ?? 1
 
   const handleFilterChange = useCallback((key: string, value: string) => {
     setFilters(prev => {
@@ -55,6 +58,7 @@ export default function Transactions() {
       }
       return { ...prev, [key]: value }
     })
+    setPage(1) // filter change resets to first page
   }, [])
 
   const handleSelect = useCallback((id: number, checked: boolean) => {
@@ -71,6 +75,25 @@ export default function Transactions() {
     }
   }, [deleteMutation])
 
+  const handleEdit = useCallback((tx: Transaction) => {
+    setEditingTx(tx)
+    setShowForm(true)
+  }, [])
+
+  const handleApprove = useCallback((tx: Transaction) => {
+    updateMutation.mutate({ id: tx.id, data: { approve: true } })
+  }, [updateMutation])
+
+  const handleNew = useCallback(() => {
+    setEditingTx(null)
+    setShowForm(true)
+  }, [])
+
+  const handleCloseForm = useCallback(() => {
+    setShowForm(false)
+    setEditingTx(null)
+  }, [])
+
 
   return (
     <>
@@ -78,7 +101,7 @@ export default function Transactions() {
         <h1 className="page-title">Transactions</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setShowExportModal(true)}>Export CSV</button>
-          <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>Add Transaction</button>
+          <button className="btn btn-primary" onClick={handleNew}>Add Transaction</button>
         </div>
       </div>
 
@@ -120,16 +143,33 @@ export default function Transactions() {
             onSelect={handleSelect}
             onSelectAll={handleSelectAll}
             onDelete={handleDelete}
+            onEdit={handleEdit}
+            onApprove={handleApprove}
             sort={sort}
             direction={direction}
             onSortChange={handleSortChange}
           />
         )}
 
-        {hasNextPage && (
-          <div className="load-more">
-            <button className="btn" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-              {isFetchingNextPage ? 'Loading...' : 'Load More'}
+        {totalPages > 1 && (
+          <div className="pagination">
+            <button
+              className="btn btn-sm"
+              onClick={() => setPage(p => Math.max(p - 1, 1))}
+              disabled={currentPage <= 1}
+            >
+              ← Previous
+            </button>
+            <span className="page-indicator">
+              Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+              <span style={{ color: 'var(--text3)', marginLeft: 8 }}>({(data?.total ?? 0).toLocaleString()} total)</span>
+            </span>
+            <button
+              className="btn btn-sm"
+              onClick={() => setPage(p => Math.min(p + 1, totalPages))}
+              disabled={currentPage >= totalPages}
+            >
+              Next →
             </button>
           </div>
         )}
@@ -137,12 +177,12 @@ export default function Transactions() {
 
       <BulkActionBar selectedIds={selectedIds} onApply={() => setSelectedIds([])} />
 
-      {showAddForm && (
+      {showForm && (
         <>
-          <div className="slide-over-backdrop" onClick={() => setShowAddForm(false)} />
+          <div className="slide-over-backdrop" onClick={handleCloseForm} />
           <div className="slide-over">
-            <h2>Add Transaction</h2>
-            <AddTransactionForm onClose={() => setShowAddForm(false)} />
+            <h2>{editingTx ? `Edit Transaction #${editingTx.id}` : 'Add Transaction'}</h2>
+            <TransactionForm transaction={editingTx} onClose={handleCloseForm} />
           </div>
         </>
       )}

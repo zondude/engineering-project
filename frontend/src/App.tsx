@@ -20,8 +20,8 @@ function Layout() {
     <>
       <nav className="sidebar">
         <div className="logo">
-          <div className="logo-mark">S</div>
-          Soraban
+          <div className="logo-mark">B</div>
+          Bookkeeping
         </div>
         <div className="nav-section">
           <div className="nav-label">Overview</div>

@@ -1,19 +1,20 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchTransactions, updateTransaction, deleteTransaction, bulkAction, createTransaction } from '../api/client'
 import type { Transaction } from '../types'
 
-interface TransactionsPage {
+export interface TransactionsPage {
   transactions: Transaction[]
-  next_cursor: string | null
+  page: number
+  per_page: number
+  total: number
+  total_pages: number
 }
 
-export function useTransactions(filters: Record<string, string> = {}) {
-  return useInfiniteQuery<TransactionsPage>({
+export function useTransactions(filters: Record<string, string | number> = {}) {
+  return useQuery<TransactionsPage>({
     queryKey: ['transactions', filters],
-    queryFn: ({ pageParam }) =>
-      fetchTransactions({ ...filters, ...(pageParam ? { cursor: pageParam as string } : {}) }),
-    getNextPageParam: (lastPage) => lastPage.next_cursor,
-    initialPageParam: undefined as string | undefined,
+    queryFn: () => fetchTransactions(filters),
+    placeholderData: (prev) => prev, // keeps old data visible while a new page loads
   })
 }
 

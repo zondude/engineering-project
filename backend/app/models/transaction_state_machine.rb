@@ -7,7 +7,10 @@ class TransactionStateMachine
 
   transition from: :pending, to: [:flagged, :reviewed]
   transition from: :flagged, to: [:reviewed, :pending]
-  transition from: :reviewed, to: [:flagged]
+  # reviewed -> pending allowed as an explicit "undo / re-open" so users can
+  # correct an accidental approve. Every transition is persisted to
+  # transaction_transitions so the audit trail still tells the full story.
+  transition from: :reviewed, to: [:flagged, :pending]
 
   after_transition(to: :pending) do |transaction, _transition|
     transaction.anomalies.unresolved.update_all(resolved: true, resolved_at: Time.current)

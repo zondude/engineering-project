@@ -47,10 +47,25 @@ export interface Rule {
 export interface DashboardData {
   uncategorized_count: number
   flagged_anomalies_count: number
-  reviewed_today: number
   total_transactions: number
   unresolved_anomalies_count: number
   resolved_anomalies_count: number
-  recent_anomalies: Anomaly[]
-  uncategorized_sample: Transaction[]
+  needs_attention: NeedsAttentionRow[]
+  needs_attention_breakdown: NeedsAttentionBreakdown
+  needs_attention_page: number
+  needs_attention_total_pages: number
+  needs_attention_total: number
+}
+
+export interface NeedsAttentionRow extends Transaction {
+  anomalies: Anomaly[]
+}
+
+export interface NeedsAttentionBreakdown {
+  all: number
+  anomalies: number
+  high: number
+  medium: number
+  low: number
+  uncategorized: number
 }
