@@ -1,13 +1,25 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { fetchDashboard, resolveAnomaly, updateTransaction } from '../api/client'
 import type { DashboardData } from '../types'
 import AnomalyBadge from '../components/AnomalyBadge'
+
+const TRUNCATE_AT = 150
 
 export default function Dashboard() {
   const { data, isLoading, refetch } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
     queryFn: fetchDashboard,
   })
+
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const toggleExpanded = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const handleApprove = async (id: number) => {
     await updateTransaction(id, { approve: true })
@@ -73,9 +85,18 @@ export default function Dashboard() {
                   </td>
                   <td>
                     {anomaly.explanation ? (
-                      <p className="anomaly-explanation">{anomaly.explanation}</p>
+                      <div className={`anomaly-explanation ${expandedIds.has(anomaly.id) ? 'expanded' : ''}`}>
+                        <p>{anomaly.explanation}</p>
+                        {anomaly.explanation.length > TRUNCATE_AT && (
+                          <button className="show-more-btn" onClick={() => toggleExpanded(anomaly.id)}>
+                            {expandedIds.has(anomaly.id) ? 'Show less' : 'Show more'}
+                          </button>
+                        )}
+                      </div>
                     ) : (
-                      <p className="anomaly-explanation generating">Generating explanation...</p>
+                      <div className="anomaly-explanation generating">
+                        <p>Generating explanation...</p>
+                      </div>
                     )}
                   </td>
                   <td className="actions">
