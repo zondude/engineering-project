@@ -14,6 +14,10 @@ class Api::V1::TransactionsController < Api::V1::BaseController
   EXPORT_HEADERS = %w[id date description amount category status source anomaly_flags].freeze
   EXPORT_BATCH_SIZE = 1000
 
+  def count
+    render json: { count: filtered_scope.count }
+  end
+
   def export
     response.headers['Content-Type'] = 'text/csv'
     response.headers['Content-Disposition'] = "attachment; filename=\"transactions-#{Date.current.iso8601}.csv\""

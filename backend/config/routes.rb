@@ -13,6 +13,7 @@ Rails.application.routes.draw do
         collection do
           put :bulk
           get :export
+          get :count
         end
       end
       resources :rules

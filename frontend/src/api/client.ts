@@ -74,6 +74,11 @@ export async function bulkAction(ids: number[], actionType: string, value?: stri
   return res.data
 }
 
+export async function countTransactions(params: Record<string, string> = {}): Promise<number> {
+  const res = await api.get('/transactions/count', { params })
+  return res.data.count
+}
+
 export async function exportTransactions(params: Record<string, string> = {}) {
   const res = await api.get('/transactions/export', { params, responseType: 'blob' })
 

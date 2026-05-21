@@ -116,6 +116,15 @@ tr.flagged { border-left: 3px solid var(--amber); }
 .slide-over { position: fixed; right: 0; top: 0; bottom: 0; width: 440px; background: white; z-index: 201; padding: 24px; overflow-y: auto; box-shadow: -4px 0 24px rgba(0,0,0,0.1); }
 .slide-over h2 { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
 
+.export-summary {
+  padding: 12px 14px;
+  background: var(--accent-light);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
 .dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; }
 .dropzone:hover, .dropzone.active { border-color: var(--accent); background: var(--accent-light); }
 .dropzone p { color: var(--text3); font-size: 14px; }
