@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { signIn, signUp } from '../api/client'
 
 export default function Login() {
-  const [email, setEmail] = useState('demo@soraban.com')
+  const [email, setEmail] = useState('demo@test.com')
   const [password, setPassword] = useState('password123')
   const [error, setError] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)

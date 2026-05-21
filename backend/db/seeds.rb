@@ -3,7 +3,7 @@ require 'faker'
 puts "Seeding database..."
 
 # Create demo user
-user = User.find_or_create_by!(email: 'demo@soraban.com') do |u|
+user = User.find_or_create_by!(email: 'demo@test.com') do |u|
   u.password = 'password123'
 end
 
