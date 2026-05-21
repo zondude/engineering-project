@@ -96,6 +96,24 @@ RSpec.describe RulesEngine do
       expect(tx.category).to eq('Shopping')
       expect(tx.anomaly_flags).to include('high_value')
     end
+
+    it 'breaks priority ties deterministically by id when default-fetched (older rule wins)' do
+      # Two rules with the SAME priority — without the (:priority, :id) tiebreaker
+      # the winner would be whichever Postgres returns first, which is undefined.
+      first = create(:rule, user: user, priority: 5,
+        condition: { 'field' => 'description', 'operator' => 'contains', 'value' => 'rideshare' },
+        action: { 'type' => 'set_category', 'value' => 'Travel' })
+      _second = create(:rule, user: user, priority: 5,
+        condition: { 'field' => 'description', 'operator' => 'contains', 'value' => 'rideshare' },
+        action: { 'type' => 'set_category', 'value' => 'Transportation' })
+      tx = create(:transaction, user: user, description: 'Rideshare to airport', category: nil)
+
+      RulesEngine.apply(tx)  # no rules: kwarg — exercises the DB-fetched default ordering
+
+      # First-created (lower id) wins the tie
+      expect(tx.reload.category).to eq('Travel')
+      expect(first.id).to be < Rule.order(:id).last.id
+    end
   end
 
   describe 'inactive rules' do

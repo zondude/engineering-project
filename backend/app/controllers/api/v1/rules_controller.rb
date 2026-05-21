@@ -1,6 +1,8 @@
 class Api::V1::RulesController < Api::V1::BaseController
   def index
-    rules = current_user.rules.order(:priority)
+    # Tiebreak same-priority rules by id (oldest first) so the UI list order
+    # matches the order the engine evaluates them in.
+    rules = current_user.rules.order(:priority, :id)
     render json: RuleSerializer.render_as_json(rules)
   end
 

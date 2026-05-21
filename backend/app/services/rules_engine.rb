@@ -1,6 +1,8 @@
 class RulesEngine
   def self.apply(transaction, rules: nil)
-    rules ||= Rule.where(user_id: transaction.user_id, active: true).order(:priority)
+    # Tiebreak same-priority rules by id (oldest first) so behavior is
+    # deterministic when two rules share a priority number.
+    rules ||= Rule.where(user_id: transaction.user_id, active: true).order(:priority, :id)
     applied_action_types = Set.new
 
     rules.each do |rule|

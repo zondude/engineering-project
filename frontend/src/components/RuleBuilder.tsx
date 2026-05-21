@@ -132,9 +132,12 @@ export default function RuleBuilder({ rule, onSave, onCancel }: Props) {
         <input id="priority" type="number" {...register('priority', { valueAsNumber: true })} />
       </div>
 
-      <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="form-group checkbox-row">
         <input type="checkbox" id="continue" {...register('continue_processing')} />
-        <label htmlFor="continue" style={{ margin: 0 }}>Continue processing after match</label>
+        <label htmlFor="continue">
+          Continue evaluating lower-priority rules after this one matches
+          <span className="form-help">By default the first matching rule fires and stops. Enable this to chain multiple rules on the same transaction.</span>
+        </label>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>

@@ -49,6 +49,8 @@ export interface DashboardData {
   flagged_anomalies_count: number
   reviewed_today: number
   total_transactions: number
+  unresolved_anomalies_count: number
+  resolved_anomalies_count: number
   recent_anomalies: Anomaly[]
   uncategorized_sample: Transaction[]
 }

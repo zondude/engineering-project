@@ -1,15 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { fetchDashboard, resolveAnomaly, updateTransaction } from '../api/client'
 import type { DashboardData } from '../types'
 import AnomalyBadge from '../components/AnomalyBadge'
 
 const TRUNCATE_AT = 150
 
+type AnomalyView = 'unresolved' | 'resolved'
+
 export default function Dashboard() {
+  const [view, setView] = useState<AnomalyView>('unresolved')
+
   const { data, isLoading, refetch } = useQuery<DashboardData>({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboard,
+    queryKey: ['dashboard', view],
+    queryFn: () => fetchDashboard(view),
   })
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
@@ -59,7 +64,23 @@ export default function Dashboard() {
       </div>
 
       <div className="section">
-        <h2 className="section-title">Needs Attention</h2>
+        <div className="section-header">
+          <h2 className="section-title">{view === 'resolved' ? 'Resolved Anomalies' : 'Needs Attention'}</h2>
+          <div className="view-toggle">
+            <button
+              className={`view-toggle-btn ${view === 'unresolved' ? 'active' : ''}`}
+              onClick={() => setView('unresolved')}
+            >
+              Unresolved ({data.unresolved_anomalies_count})
+            </button>
+            <button
+              className={`view-toggle-btn ${view === 'resolved' ? 'active' : ''}`}
+              onClick={() => setView('resolved')}
+            >
+              Resolved ({data.resolved_anomalies_count})
+            </button>
+          </div>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -76,7 +97,11 @@ export default function Dashboard() {
               {data.recent_anomalies.map(anomaly => (
                 <tr key={anomaly.id}>
                   <td><AnomalyBadge type={anomaly.anomaly_type} /></td>
-                  <td>ID #{anomaly.transaction_id}</td>
+                  <td>
+                    <Link to={`/transactions?id=${anomaly.transaction_id}`} className="tx-link">
+                      ID #{anomaly.transaction_id}
+                    </Link>
+                  </td>
                   <td className="amount">${Number(anomaly.details?.transaction_amount || 0).toFixed(2)}</td>
                   <td>
                     <span className={`badge badge-${anomaly.severity === 'high' ? 'red' : anomaly.severity === 'medium' ? 'amber' : 'gray'}`}>
@@ -100,13 +125,22 @@ export default function Dashboard() {
                     )}
                   </td>
                   <td className="actions">
-                    <button className="btn btn-sm" onClick={() => handleResolve(anomaly.id)}>Resolve</button>
-                    <button className="btn btn-sm btn-primary" onClick={() => handleApprove(anomaly.transaction_id)}>Approve</button>
+                    {view === 'unresolved' && (
+                      <>
+                        <button className="btn btn-sm" onClick={() => handleResolve(anomaly.id)}>Resolve</button>
+                        <button className="btn btn-sm btn-primary" onClick={() => handleApprove(anomaly.transaction_id)}>Approve</button>
+                      </>
+                    )}
+                    {view === 'resolved' && (
+                      <span style={{ color: 'var(--text3)', fontSize: 12 }}>Resolved</span>
+                    )}
                   </td>
                 </tr>
               ))}
               {data.recent_anomalies.length === 0 && (
-                <tr><td colSpan={6} className="empty-state">No anomalies to review</td></tr>
+                <tr><td colSpan={6} className="empty-state">
+                  {view === 'resolved' ? 'No resolved anomalies yet' : 'No anomalies to review'}
+                </td></tr>
               )}
             </tbody>
           </table>

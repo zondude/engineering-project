@@ -128,8 +128,8 @@ export async function resolveAnomaly(id: number) {
 }
 
 // Dashboard
-export async function fetchDashboard() {
-  const res = await api.get('/dashboard')
+export async function fetchDashboard(view?: 'unresolved' | 'resolved') {
+  const res = await api.get('/dashboard', { params: view ? { view } : {} })
   return res.data
 }
 

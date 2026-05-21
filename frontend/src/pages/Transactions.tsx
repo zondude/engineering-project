@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTransactions, useDeleteTransaction } from '../hooks/useTransactions'
 import TransactionTable, { type SortField, type SortDirection } from '../components/TransactionTable'
 import BulkActionBar from '../components/BulkActionBar'
@@ -7,6 +8,9 @@ import ExportModal from '../components/ExportModal'
 import type { Transaction } from '../types'
 
 export default function Transactions() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const idFilter = searchParams.get('id') ?? ''
+
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [sort, setSort] = useState<SortField>('id')
   const [direction, setDirection] = useState<SortDirection>('desc')
@@ -15,9 +19,15 @@ export default function Transactions() {
   const [showExportModal, setShowExportModal] = useState(false)
 
   const queryFilters = useMemo(
-    () => ({ ...filters, sort, direction }),
-    [filters, sort, direction]
+    () => ({ ...filters, sort, direction, ...(idFilter ? { id: idFilter } : {}) }),
+    [filters, sort, direction, idFilter]
   )
+
+  const clearIdFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('id')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useTransactions(queryFilters)
   const deleteMutation = useDeleteTransaction()
@@ -71,6 +81,13 @@ export default function Transactions() {
           <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>Add Transaction</button>
         </div>
       </div>
+
+      {idFilter && (
+        <div className="active-filter-chip">
+          Showing transaction <strong>#{idFilter}</strong> only
+          <button onClick={clearIdFilter}>Clear filter</button>
+        </div>
+      )}
 
       <div className="table-wrap">
         <div className="filters-row">

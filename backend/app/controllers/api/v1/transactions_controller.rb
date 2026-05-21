@@ -55,8 +55,10 @@ class Api::V1::TransactionsController < Api::V1::BaseController
   def update
     transaction = current_user_transactions.find(params[:id])
 
-    if params[:approve]
-      transaction.state_machine.transition_to!(:reviewed)
+    # The frontend wraps update bodies in { transaction: { ... } }, so the
+    # approve flag arrives nested. Accept either shape.
+    if params[:approve].present? || params.dig(:transaction, :approve).present?
+      approve_and_resolve(transaction)
       render json: TransactionSerializer.render_as_json(transaction.reload, view: :detail)
     elsif transaction.update(transaction_params)
       render json: TransactionSerializer.render_as_json(transaction.reload, view: :detail)
@@ -85,7 +87,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
       updated = 0
       transactions.find_each do |tx|
         if tx.state_machine.can_transition_to?(:reviewed)
-          tx.state_machine.transition_to!(:reviewed)
+          approve_and_resolve(tx)
           updated += 1
         end
       end
@@ -108,6 +110,18 @@ class Api::V1::TransactionsController < Api::V1::BaseController
 
   def transaction_params
     params.require(:transaction).permit(:date, :description, :amount, :category)
+  end
+
+  # Approving a transaction also marks any of its open anomalies as resolved.
+  # Otherwise the Dashboard's "Needs Attention" (which filters by
+  # anomaly.resolved = false) keeps showing flags for a transaction the user
+  # has already signed off on.
+  def approve_and_resolve(transaction)
+    transaction.state_machine.transition_to!(:reviewed)
+    transaction.anomalies.where(resolved: false).update_all(
+      resolved: true,
+      resolved_at: Time.current
+    )
   end
 
   def filtered_scope
@@ -153,6 +167,7 @@ class Api::V1::TransactionsController < Api::V1::BaseController
   end
 
   def apply_filters(scope)
+    scope = scope.where(id: params[:id]) if params[:id].present?
     scope = scope.where(status: params[:status]) if params[:status].present?
     scope = scope.where(category: params[:category]) if params[:category].present?
     scope = scope.uncategorized if params[:uncategorized] == 'true'
