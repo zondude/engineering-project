@@ -41,4 +41,24 @@ RSpec.describe CsvImporter do
     expect(result.imported_count).to eq(1)
     expect(Transaction.last.category).to eq('Food')
   end
+
+  describe 'error row numbering' do
+    it 'reports the file line number (so the user can open their CSV and find the bad row)' do
+      # Line 1: header
+      # Line 2: valid row
+      # Line 3: bad date     -> should report "Row 3"
+      # Line 4: bad amount   -> should report "Row 4"
+      csv = <<~CSV
+        date,description,amount
+        2024-01-15,Valid,10.00
+        not-a-date,Bad Date,15.00
+        2024-01-17,Bad Amount,not_a_number
+      CSV
+
+      result = import(csv)
+
+      expect(result.errors).to include(match(/^Row 3: invalid date/))
+      expect(result.errors).to include(match(/^Row 4: invalid amount/))
+    end
+  end
 end

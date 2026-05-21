@@ -9,7 +9,9 @@ class CsvImporter
     @imported = 0
     @errors_list = []
     @flagged = 0
-    @row_number = 0
+    # Start at 1 so that the first data row is reported as line 2 — matches
+    # how text editors and spreadsheet apps number lines (header is line 1).
+    @row_number = 1
     @imported_ids = []
   end
 
