@@ -91,6 +91,15 @@ Rails.application.configure do
   # Allow Render hosts
   config.hosts.clear
 
+  # ActionCable: accept WebSocket connections from the frontend's origin.
+  # Without this, Rails refuses cross-origin WS upgrades and the Import page
+  # spinner waits forever for progress events that never arrive.
+  config.action_cable.allowed_request_origins = [
+    ENV.fetch('FRONTEND_URL', nil),
+    /https?:\/\/localhost:\d+/
+  ].compact
+  config.action_cable.disable_request_forgery_protection = false
+
   # Use Sidekiq for Active Job in production
   config.active_job.queue_adapter = :sidekiq
 

@@ -180,6 +180,23 @@ tr.flagged { border-left: 3px solid var(--amber); }
   margin-top: 8px;
 }
 
+.error-panel {
+  background: var(--surface);
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  padding: 12px 16px;
+  max-height: 240px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.error-row {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+}
+.error-row:last-child { border-bottom: none; }
+
 .dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; }
 .dropzone:hover, .dropzone.active { border-color: var(--accent); background: var(--accent-light); }
 .dropzone p { color: var(--text3); font-size: 14px; }

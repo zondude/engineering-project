@@ -1,5 +1,5 @@
 class CsvImporter
-  Result = Struct.new(:imported_count, :error_count, :flagged_count, :errors, keyword_init: true)
+  Result = Struct.new(:imported_count, :error_count, :flagged_count, :errors, :imported_ids, keyword_init: true)
 
   def initialize(user:, csv_content: nil, file_path: nil, import_id: nil)
     @user = user
@@ -10,6 +10,7 @@ class CsvImporter
     @errors_list = []
     @flagged = 0
     @row_number = 0
+    @imported_ids = []
   end
 
   def import
@@ -23,7 +24,8 @@ class CsvImporter
       imported_count: @imported,
       error_count: @errors_list.size,
       flagged_count: @flagged,
-      errors: @errors_list
+      errors: @errors_list,
+      imported_ids: @imported_ids
     )
   end
 
@@ -45,6 +47,7 @@ class CsvImporter
 
     inserted = Transaction.insert_all(valid_records, returning: [:id])
     @imported += inserted.count
+    @imported_ids.concat(inserted.rows.flatten)
 
     broadcast_progress if @import_id
 
