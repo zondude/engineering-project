@@ -4,6 +4,7 @@ import CSVDropzone from '../components/CSVDropzone'
 import TransactionForm from '../components/TransactionForm'
 import { uploadCSV, updateTransaction, deleteTransaction } from '../api/client'
 import { useImportProgress } from '../hooks/useWebSocket'
+import { useConfirm } from '../hooks/useConfirm'
 import type { Transaction, NeedsAttentionRow } from '../types'
 import AnomalyBadge from '../components/AnomalyBadge'
 
@@ -24,6 +25,7 @@ export default function Import() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
   const [error, setError] = useState('')
   const queryClient = useQueryClient()
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const progress = useImportProgress(importId)
 
@@ -68,11 +70,17 @@ export default function Import() {
   }, [invalidateAll])
 
   const handleDelete = useCallback(async (row: NeedsAttentionRow) => {
-    if (!confirm(`Delete transaction #${row.id}?`)) return
+    const ok = await confirm({
+      title: `Delete transaction #${row.id}?`,
+      message: 'This will permanently remove the transaction and any anomalies attached to it.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
     await deleteTransaction(row.id)
     setPreviewRows(prev => prev.filter(r => r.id !== row.id))
     invalidateAll()
-  }, [invalidateAll])
+  }, [confirm, invalidateAll])
 
   const handleEditClose = useCallback(() => {
     setEditingTx(null)
@@ -204,6 +212,8 @@ export default function Import() {
           </div>
         </>
       )}
+
+      {confirmDialog}
     </>
   )
 }

@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchDashboard, updateTransaction, deleteTransaction } from '../api/client'
+import { useConfirm } from '../hooks/useConfirm'
 import type { DashboardData, NeedsAttentionRow, Anomaly } from '../types'
 import AnomalyBadge from '../components/AnomalyBadge'
 import TransactionForm from '../components/TransactionForm'
@@ -62,6 +63,7 @@ export default function Dashboard() {
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [editingTransaction, setEditingTransaction] = useState<NeedsAttentionRow | null>(null)
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const toggleExpanded = (id: number) => {
     setExpandedIds(prev => {
@@ -86,7 +88,13 @@ export default function Dashboard() {
   }
 
   const handleDelete = async (row: NeedsAttentionRow) => {
-    if (!confirm(`Delete transaction #${row.id}?`)) return
+    const ok = await confirm({
+      title: `Delete transaction #${row.id}?`,
+      message: 'This will permanently remove the transaction and any anomalies attached to it.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
     await deleteTransaction(row.id)
     invalidateAll()
     refetch()
@@ -283,6 +291,8 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      {confirmDialog}
     </>
   )
 }

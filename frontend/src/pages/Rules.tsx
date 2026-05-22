@@ -4,22 +4,29 @@ import { fetchRules, deleteRule, updateRule } from '../api/client'
 import type { Rule } from '../types'
 import RuleBuilder from '../components/RuleBuilder'
 import { formatCondition, formatAction } from '../utils/ruleLabels'
+import { useConfirm } from '../hooks/useConfirm'
 
 export default function Rules() {
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingRule, setEditingRule] = useState<Rule | null>(null)
   const queryClient = useQueryClient()
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const { data: rules = [], isLoading } = useQuery<Rule[]>({
     queryKey: ['rules'],
     queryFn: fetchRules,
   })
 
-  const handleDelete = async (id: number) => {
-    if (confirm('Delete this rule?')) {
-      await deleteRule(id)
-      queryClient.invalidateQueries({ queryKey: ['rules'] })
-    }
+  const handleDelete = async (rule: Rule) => {
+    const ok = await confirm({
+      title: `Delete rule "${rule.name}"?`,
+      message: 'This will stop the rule from running on new transactions. Existing categorizations stay intact.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
+    await deleteRule(rule.id)
+    queryClient.invalidateQueries({ queryKey: ['rules'] })
   }
 
   const handleToggle = async (rule: Rule) => {
@@ -82,7 +89,7 @@ export default function Rules() {
                 </td>
                 <td className="actions">
                   <button className="btn btn-sm" onClick={() => { setEditingRule(rule); setShowBuilder(true) }}>Edit</button>
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(rule.id)}>Delete</button>
+                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(rule)}>Delete</button>
                 </td>
               </tr>
             ))}
@@ -106,6 +113,8 @@ export default function Rules() {
           </div>
         </>
       )}
+
+      {confirmDialog}
     </>
   )
 }

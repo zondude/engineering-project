@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTransactions, useDeleteTransaction, useUpdateTransaction } from '../hooks/useTransactions'
+import { useConfirm } from '../hooks/useConfirm'
 import TransactionTable, { type SortField, type SortDirection } from '../components/TransactionTable'
 import BulkActionBar from '../components/BulkActionBar'
 import TransactionForm from '../components/TransactionForm'
@@ -34,6 +35,7 @@ export default function Transactions() {
   const { data, isLoading } = useTransactions(queryFilters)
   const deleteMutation = useDeleteTransaction()
   const updateMutation = useUpdateTransaction()
+  const { confirm, dialog: confirmDialog } = useConfirm()
 
   const handleSortChange = useCallback((field: SortField) => {
     if (field === sort) {
@@ -69,11 +71,15 @@ export default function Transactions() {
     setSelectedIds(checked ? allTransactions.map(t => t.id) : [])
   }, [allTransactions])
 
-  const handleDelete = useCallback((tx: Transaction) => {
-    if (confirm(`Delete transaction #${tx.id}?`)) {
-      deleteMutation.mutate(tx.id)
-    }
-  }, [deleteMutation])
+  const handleDelete = useCallback(async (tx: Transaction) => {
+    const ok = await confirm({
+      title: `Delete transaction #${tx.id}?`,
+      message: 'This will permanently remove the transaction and any anomalies attached to it.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (ok) deleteMutation.mutate(tx.id)
+  }, [confirm, deleteMutation])
 
   const handleEdit = useCallback((tx: Transaction) => {
     setEditingTx(tx)
@@ -190,6 +196,8 @@ export default function Transactions() {
       {showExportModal && (
         <ExportModal initialFilters={filters} onClose={() => setShowExportModal(false)} />
       )}
+
+      {confirmDialog}
     </>
   )
 }
