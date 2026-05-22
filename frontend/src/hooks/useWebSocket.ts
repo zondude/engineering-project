@@ -69,23 +69,25 @@ export function useAnomalyNotifications(onNotification: (n: AnomalyNotification)
 }
 
 export function useImportProgress(importId: string | null) {
-  const [progress, setProgress] = useState<ImportProgress | null>(null)
-  // `subscribed` flips true when ActionCable confirms the subscription.
-  // Callers should wait on this before triggering work that might broadcast
-  // back — otherwise broadcasts fired before subscription land on zero
-  // subscribers and the UI never sees the result.
-  const [subscribed, setSubscribed] = useState(false)
+  // Track which import the progress / subscription belongs to. We need this
+  // because when importId changes, the useEffect that resets internal state
+  // runs AFTER render — so during that one render the consumer would see
+  // stale progress from the previous import paired with the new importId.
+  // Filtering at the boundary (returning null when the IDs don't match)
+  // guarantees the consumer never gets cross-contaminated state.
+  const [progressFor, setProgressFor] = useState<{ id: string | null; progress: ImportProgress | null }>({ id: null, progress: null })
+  const [subscribedId, setSubscribedId] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
     if (!importId) {
-      setSubscribed(false)
-      setProgress(null)
+      setProgressFor({ id: null, progress: null })
+      setSubscribedId(null)
       return
     }
 
-    setSubscribed(false)
-    setProgress(null)
+    setProgressFor({ id: importId, progress: null })
+    setSubscribedId(null)
 
     const ws = new WebSocket(cableUrl())
     wsRef.current = ws
@@ -101,13 +103,13 @@ export function useImportProgress(importId: string | null) {
       const data = JSON.parse(event.data)
       if (data.type === 'ping' || data.type === 'welcome') return
       if (data.type === 'confirm_subscription') {
-        setSubscribed(true)
+        setSubscribedId(importId)
         return
       }
 
       const message = data.message
       if (message) {
-        setProgress(message)
+        setProgressFor({ id: importId, progress: message })
       }
     }
 
@@ -116,5 +118,8 @@ export function useImportProgress(importId: string | null) {
     }
   }, [importId])
 
-  return { progress, subscribed }
+  return {
+    progress: progressFor.id === importId ? progressFor.progress : null,
+    subscribed: subscribedId === importId,
+  }
 }

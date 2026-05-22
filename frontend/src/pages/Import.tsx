@@ -57,20 +57,26 @@ export default function Import() {
     })
   }, [subscribed, pendingFile, importId])
 
-  if (progress?.status === 'complete' && !result) {
-    setResult({
-      imported: progress.imported!,
-      errors: progress.errors!,
-      flagged: progress.flagged!,
-      error_details: progress.error_details ?? [],
-      preview: progress.preview ?? [],
-      preview_limit: progress.preview_limit ?? 50,
-    })
-    setPreviewRows(progress.preview ?? [])
-    setUploading(false)
-    queryClient.invalidateQueries({ queryKey: ['transactions'] })
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-  }
+  // When the broadcast tells us the import is done, snapshot the result and
+  // imported rows. Tied to importId in the deps so a new upload guarantees
+  // a re-run; tied to !result so we don't re-snapshot mid-render after we
+  // already captured it.
+  useEffect(() => {
+    if (progress?.status === 'complete' && !result) {
+      setResult({
+        imported: progress.imported!,
+        errors: progress.errors!,
+        flagged: progress.flagged!,
+        error_details: progress.error_details ?? [],
+        preview: progress.preview ?? [],
+        preview_limit: progress.preview_limit ?? 50,
+      })
+      setPreviewRows(progress.preview ?? [])
+      setUploading(false)
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    }
+  }, [progress, result, importId, queryClient])
 
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['transactions'] })
