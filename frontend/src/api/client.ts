@@ -58,6 +58,11 @@ export async function fetchTransactions(params: Record<string, string | number>)
   return res.data
 }
 
+export async function fetchTransaction(id: number) {
+  const res = await api.get(`/transactions/${id}`)
+  return res.data
+}
+
 export async function createTransaction(data: Record<string, unknown>) {
   const res = await api.post('/transactions', { transaction: data })
   return res.data

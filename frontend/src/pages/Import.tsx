@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import CSVDropzone from '../components/CSVDropzone'
 import TransactionForm from '../components/TransactionForm'
-import { uploadCSV, updateTransaction, deleteTransaction } from '../api/client'
+import { uploadCSV, updateTransaction, deleteTransaction, fetchTransaction } from '../api/client'
 import { useImportProgress } from '../hooks/useWebSocket'
 import { useConfirm } from '../hooks/useConfirm'
 import type { Transaction, NeedsAttentionRow } from '../types'
@@ -82,10 +82,25 @@ export default function Import() {
     invalidateAll()
   }, [confirm, invalidateAll])
 
-  const handleEditClose = useCallback(() => {
+  const handleEditClose = useCallback(async () => {
+    const editedId = editingTx?.id
     setEditingTx(null)
     invalidateAll()
-  }, [invalidateAll])
+    // previewRows is local state (snapshot from the import broadcast) so the
+    // global query invalidations don't refresh it. Refetch just the edited
+    // row and merge it back so the table reflects the change without a page
+    // reload.
+    if (editedId !== undefined) {
+      try {
+        const fresh = await fetchTransaction(editedId)
+        setPreviewRows(prev => prev.map(r => r.id === editedId ? { ...r, ...fresh } : r))
+      } catch {
+        // If the fetch fails (e.g. row was deleted in another tab), drop it
+        // from the preview rather than leave stale data on screen.
+        setPreviewRows(prev => prev.filter(r => r.id !== editedId))
+      }
+    }
+  }, [editingTx, invalidateAll])
 
   return (
     <>
