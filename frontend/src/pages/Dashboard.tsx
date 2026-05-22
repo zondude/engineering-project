@@ -125,7 +125,7 @@ export default function Dashboard() {
         </div>
         <div className="stat-card">
           <div className="label">Flagged Anomalies</div>
-          <div className="value red">{data.flagged_anomalies_count}</div>
+          <div className="value red">{counts.anomalies}</div>
         </div>
         <div className="stat-card">
           <div className="label">Total Transactions</div>
