@@ -54,4 +54,18 @@ RSpec.describe 'POST /api/v1/imports', type: :request do
     post '/api/v1/imports', params: {}
     expect(response).to have_http_status(:unprocessable_entity)
   end
+
+  it 'uses the client-provided import_id when present' do
+    # The frontend generates the UUID so it can subscribe to the status
+    # channel before the job runs (avoids a broadcast/subscribe race).
+    csv = Rack::Test::UploadedFile.new(
+      Rails.root.join('spec/fixtures/files/valid_transactions.csv'),
+      'text/csv'
+    )
+    client_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+
+    post '/api/v1/imports', params: { file: csv, import_id: client_id }
+
+    expect(json_body['import_id']).to eq(client_id)
+  end
 end

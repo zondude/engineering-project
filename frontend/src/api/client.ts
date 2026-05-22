@@ -142,9 +142,13 @@ export async function fetchDashboard(params: Record<string, string | number> = {
 }
 
 // Imports
-export async function uploadCSV(file: File) {
+export async function uploadCSV(file: File, importId?: string) {
   const formData = new FormData()
   formData.append('file', file)
+  // Pass a client-generated import_id so the frontend can subscribe to the
+  // status channel BEFORE the job is enqueued. Avoids the race where small
+  // CSVs finish processing before the WebSocket subscription is confirmed.
+  if (importId) formData.append('import_id', importId)
   const res = await api.post('/imports', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })

@@ -70,10 +70,22 @@ export function useAnomalyNotifications(onNotification: (n: AnomalyNotification)
 
 export function useImportProgress(importId: string | null) {
   const [progress, setProgress] = useState<ImportProgress | null>(null)
+  // `subscribed` flips true when ActionCable confirms the subscription.
+  // Callers should wait on this before triggering work that might broadcast
+  // back — otherwise broadcasts fired before subscription land on zero
+  // subscribers and the UI never sees the result.
+  const [subscribed, setSubscribed] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
-    if (!importId) return
+    if (!importId) {
+      setSubscribed(false)
+      setProgress(null)
+      return
+    }
+
+    setSubscribed(false)
+    setProgress(null)
 
     const ws = new WebSocket(cableUrl())
     wsRef.current = ws
@@ -87,7 +99,11 @@ export function useImportProgress(importId: string | null) {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
-      if (data.type === 'ping' || data.type === 'welcome' || data.type === 'confirm_subscription') return
+      if (data.type === 'ping' || data.type === 'welcome') return
+      if (data.type === 'confirm_subscription') {
+        setSubscribed(true)
+        return
+      }
 
       const message = data.message
       if (message) {
@@ -100,5 +116,5 @@ export function useImportProgress(importId: string | null) {
     }
   }, [importId])
 
-  return progress
+  return { progress, subscribed }
 }

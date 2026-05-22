@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import CSVDropzone from '../components/CSVDropzone'
 import TransactionForm from '../components/TransactionForm'
@@ -19,6 +19,7 @@ interface CompleteResult {
 
 export default function Import() {
   const [importId, setImportId] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<CompleteResult | null>(null)
   const [previewRows, setPreviewRows] = useState<NeedsAttentionRow[]>([])
@@ -27,21 +28,34 @@ export default function Import() {
   const queryClient = useQueryClient()
   const { confirm, dialog: confirmDialog } = useConfirm()
 
-  const progress = useImportProgress(importId)
+  const { progress, subscribed } = useImportProgress(importId)
 
-  const handleFile = async (file: File) => {
+  const handleFile = (file: File) => {
     setUploading(true)
     setError('')
     setResult(null)
     setPreviewRows([])
-    try {
-      const data = await uploadCSV(file)
-      setImportId(data.import_id)
-    } catch {
+    // Generate the import_id client-side and set it BEFORE uploading. The
+    // useImportProgress hook will open and subscribe its WebSocket while the
+    // upload is in flight; we then wait for `subscribed === true` before
+    // actually POSTing the file, so the broadcast can't beat the subscription.
+    const newImportId = crypto.randomUUID()
+    setImportId(newImportId)
+    setPendingFile(file)
+  }
+
+  // Once the WebSocket has confirmed its subscription to ImportStatusChannel,
+  // it's safe to upload — any 'complete' broadcast will reach us.
+  useEffect(() => {
+    if (!subscribed || !pendingFile || !importId) return
+    const file = pendingFile
+    setPendingFile(null) // single-shot
+    uploadCSV(file, importId).catch(() => {
       setError('Upload failed. Please try again.')
       setUploading(false)
-    }
-  }
+      setImportId(null)
+    })
+  }, [subscribed, pendingFile, importId])
 
   if (progress?.status === 'complete' && !result) {
     setResult({
