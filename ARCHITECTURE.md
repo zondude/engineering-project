@@ -512,6 +512,38 @@ The codebase has evolved beyond what `PLAN.md` originally specified. This sectio
 - Old prompt produced 60-word wall-of-text explanations ("The bookkeeper should locate the original invoice…"). Tightened: `max_tokens` 150 → 80 → **50**, prompt now says "**under 20 words**" with few-shot examples of the terseness wanted. Result: one sharp sentence per anomaly.
 - Existing anomalies were backfilled via a one-time runner script that nulled `explanation` and re-enqueued every `AnomalyExplanationJob`.
 
+**CSV import — subscribe-before-upload race fix**
+- After the cross-container tempfile fix, small CSVs on staging still occasionally hung on "Uploading and processing…" forever — data made it into the DB but the UI never saw the completion event. Root cause: WebSocket subscription was opened *after* the upload returned. For small CSVs, Sidekiq finished and broadcast `complete` (~300 ms) before the WS handshake + subscribe completed (~500 ms on Render). Broadcast lands on zero subscribers, fire-and-forget.
+- Fix: invert the order. Frontend now generates the `import_id` itself with `crypto.randomUUID()`, sets state immediately so `useImportProgress` opens its WebSocket, **waits for ActionCable's `confirm_subscription`** (exposed as a `subscribed` flag from the hook), then sends the file. By the time Sidekiq broadcasts, the WebSocket is guaranteed to be subscribed.
+- Backend: `ImportsController` honors a client-provided `params[:import_id]` when present, falls back to `SecureRandom.uuid` otherwise (backward-compatible with any cached old bundle).
+- Regression test in `imports_spec.rb` pins the controller behavior.
+
+**CSV import — stale progress on second upload**
+- After uploading one CSV then a second, the preview table showed the *first* upload's results. The hook owned `progress` as a single state variable; when `importId` changed, the reset happened in a `useEffect` (after render), so there was a render where the new `importId` was paired with the previous import's `progress`. A render-time `setState` antipattern in `Import.tsx` then locked the stale data into `result`.
+- Fix: the hook now stores progress tagged with the `importId` it belongs to (`{ id, progress }`), and the public getter returns `null` when the tag doesn't match the current `importId`. Cross-contamination filtered at the boundary. Also moved the offending `setState` into a proper `useEffect`.
+
+**CSV error rows now use file line numbers**
+- `CsvImporter` was reporting errors as "Row N" where N was the Nth *data* row (header excluded). Users opening their CSV in VS Code see line numbers that include the header — so "Row 2" pointed at the wrong line. Initialized `@row_number = 1` so the first data row is reported as "Row 2" — matches what the user sees in their editor. Regression test in `csv_importer_spec.rb`.
+
+**Edit-on-import refresh**
+- Editing a transaction from the Import preview table didn't update the visible row until the user navigated away and back. `previewRows` is local state from the WebSocket broadcast — the global React Query invalidations TransactionForm fires don't touch it. Fix: `handleEditClose` now refetches the edited transaction via a new `fetchTransaction(id)` API call and merges it into `previewRows`.
+
+**Styled confirm dialog replaces native `window.confirm()`**
+- All four delete confirmations (Dashboard, Transactions, Rules, Import) now use a centered modal styled to match the rest of the app. New `ConfirmDialog` component + `useConfirm` hook (returns `{ confirm, dialog }` where `confirm()` is promise-based — same shape as `window.confirm`). Auto-focuses the destructive button, has aria attributes, and a contextual message per call site (the Rules delete adds "Existing categorizations stay intact" since deleting a rule has less obvious blast radius).
+
+**RuleBuilder — field/operator/validation coherence**
+- Three bugs:
+  1. Switching field from `amount` to `description` left the numeric operator (`gt`) attached, producing nonsense rules like "Description is greater than 'lululemon'".
+  2. The numeric pattern validation from the amount input persisted into the text input, so typing "lululemon" failed a stale numeric pattern check.
+  3. Error messages were generic ("Value is required") instead of contextual to the current field.
+- Fixes: a `useEffect` resets operator + value + clears errors when the current operator isn't valid for the new field. A *single shared* register call (`valueRegistration`) is used across all three input variants (number / select / text) — validation runs through a `validate` function that reads the current `field` from closure, so it stays accurate regardless of how the input is rendered. Field-aware labels and error messages ("Dollar Amount" + "Numbers only" for amount, "Text to match" + "Case-insensitive substring match" for description, etc.).
+
+**Dashboard "Flagged Anomalies" stat now matches the Anomalies filter pill**
+- The stat card was showing `transactions.flagged.count` while the pill was counting transactions with *unresolved* anomalies — so 18 vs 12 when 6 transactions had been resolved but kept their flagged status field. Stat now uses `counts.anomalies` from the breakdown — same source as the pill, drops when anomalies are resolved.
+
+**Test cleanup — silenced React act() warnings**
+- Three `ExportModal` tests fired a mount-time `useEffect` (`countTransactions`) without awaiting it, and one `TransactionForm` validation test clicked submit without awaiting react-hook-form's async validation — both produced "not wrapped in act()" warnings. Tests still passed, but the noise made the demo-day output ugly. Fixed by `await waitFor(() => expect(mockCount).toHaveBeenCalled())` in the modal tests and `await act(async () => { fireEvent.click(...) })` in the form test. Test output is now clean.
+
 ### Implementation choices that diverge from PLAN.md
 
 **State machine: `statesman`, not `aasm`** — PLAN.md initially proposed `aasm` (in Decision 4), then the "Key Technical Decisions" table further down switched to `statesman`. The code follows the table: `statesman` provides a `transaction_transitions` table that persists every state change for a full audit trail.
