@@ -21,7 +21,10 @@ describe('ExportModal', () => {
     mockExport.mockResolvedValue(undefined)
   })
 
-  it('renders date range, status, and category fields', () => {
+  // The modal fires a `countTransactions` call in a useEffect on mount.
+  // Even tests that don't care about the count have to await it, otherwise
+  // its setState fires after the test ends and React logs an act() warning.
+  it('renders date range, status, and category fields', async () => {
     render(<ExportModal onClose={vi.fn()} />)
 
     expect(screen.getByText(/from date/i)).toBeInTheDocument()
@@ -29,9 +32,11 @@ describe('ExportModal', () => {
     expect(screen.getByText(/^status$/i)).toBeInTheDocument()
     expect(screen.getByText(/^category$/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /download csv/i })).toBeInTheDocument()
+
+    await waitFor(() => expect(mockCount).toHaveBeenCalled())
   })
 
-  it('pre-populates fields from initialFilters', () => {
+  it('pre-populates fields from initialFilters', async () => {
     render(
       <ExportModal
         initialFilters={{ date_from: '2024-01-01', date_to: '2024-12-31', status: 'flagged', category: 'Travel' }}
@@ -43,6 +48,8 @@ describe('ExportModal', () => {
     expect((screen.getByLabelText(/to date/i) as HTMLInputElement).value).toBe('2024-12-31')
     expect((screen.getByLabelText(/^status$/i) as HTMLSelectElement).value).toBe('flagged')
     expect((screen.getByLabelText(/^category$/i) as HTMLSelectElement).value).toBe('Travel')
+
+    await waitFor(() => expect(mockCount).toHaveBeenCalled())
   })
 
   it('fetches and displays the matching count', async () => {
@@ -94,12 +101,14 @@ describe('ExportModal', () => {
     })
   })
 
-  it('closes when Cancel is clicked', () => {
+  it('closes when Cancel is clicked', async () => {
     const onClose = vi.fn()
     render(<ExportModal onClose={onClose} />)
 
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
 
     expect(onClose).toHaveBeenCalled()
+
+    await waitFor(() => expect(mockCount).toHaveBeenCalled())
   })
 })

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -134,12 +134,17 @@ describe('TransactionForm', () => {
   })
 
   describe('validation', () => {
-    it('does not submit when required fields are missing', () => {
+    it('does not submit when required fields are missing', async () => {
       renderForm()
 
-      // amount is required; we won't fill it
+      // amount is required; we won't fill it.
+      // Wrap the click in act() because react-hook-form's handleSubmit
+      // triggers async validation that updates internal state — without
+      // the wrap, React logs a "not wrapped in act" warning.
       fireEvent.change(screen.getByLabelText(/date/i), { target: { value: '2024-07-01' } })
-      fireEvent.click(screen.getByRole('button', { name: /create transaction/i }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /create transaction/i }))
+      })
 
       expect(mockCreate).not.toHaveBeenCalled()
     })
